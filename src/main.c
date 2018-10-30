@@ -11,7 +11,7 @@ int main(void){
 	monitor_start();
 //	transmitter_init();
 	receiver_init();
-	init_usart2(19200, F_CPU);
+//	init_usart2(19200, F_CPU);
 
 	// Main routine
 	while (1) {

@@ -4,9 +4,12 @@
 #include "tim.h"
 #include "gpio.h"
 #include "monitor.h"
+#include "uart_driver.h"
+#include "io_definitions.h"
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdbool.h>
+
 
 // buffer to hold the received message
 static RingBuffer receiveBuf = {0, 0};
@@ -25,15 +28,11 @@ static inline void startTimeoutTimer(uint32_t);
 // initiates the receiver module
 void receiver_init() {
 	init_usart2(19200, F_CPU);
-	// enable receive pin
-	init_GPIO(RECEIVE_GPIO);
-	enable_output_mode(RECEIVE_GPIO, RECEIVE_PIN);
-	// configure Timers
-	// TODO: the IO pin has to change based on TIM4
-	init_GPIO(B);
-	enable_af_mode(B, 6, 2);
-	initInputCapture(TIM4);
-	initCounterTimer(TIM3);
+	// the receive pin has to change based on the specific timer. PC6 AF 2 is for TIM3_CH1
+	init_GPIO(C);
+	enable_af_mode(C, 6, 2);
+	initInputCapture(TIM3);
+	initCounterTimer(TIM4);
 }
 
 // Main routine update, this should execute inside a while(1); by what uses this module.
@@ -42,8 +41,8 @@ void receiver_mainRoutineUpdate() {
 		// set for beginning of transmission, first bit automatically captured as zero
 		if (!sample)
 			sample = true;
-		bool dataPresent = !isEmpty(receiveBuf);
-		while (!isEmpty(&receiveBuf)) {
+		bool dataPresent = hasElement(&receiveBuf);
+		while (hasElement(&receiveBuf)) {
 			printf(get(&receiveBuf));
 		}
 		if (dataPresent)
@@ -57,7 +56,7 @@ void TIM3_IRQHandler() {
 	// case when we're in a half clock period edge
 	if (sample) {
 		// sample bit
-		if (select_gpio(RECEIVE_GPIO)->IDR & (1<<RECEIVE_PIN) != 0) {
+		if ((select_gpio(RECEIVE_GPIO)->IDR) & ((1<<RECEIVE_PIN) != 0)) {
 			dataByte |= (1<<currBit);
 		}
 		else {
@@ -87,10 +86,8 @@ void TIM3_IRQHandler() {
 
 // Counter Timer for Half bit timeout. Indicates whether to sample on the next half clock period or not
 void TIM4_IRQHandler() {
-	// if this timeout ocurrs, we're at bit period edge, the next must be a sample.
+	// if this timeout occurs, we're at bit period edge, the next must be a sample.
 	sample = true;
-
-
 }
 
 // Enables the Input Capture Timer for stamping and sampling on edge. Sampling only occurs every half-period edge.
@@ -98,7 +95,7 @@ void TIM4_IRQHandler() {
 static void initInputCapture(enum TIMs TIMER) {
 	enable_timer_clk(TIMER);
 	set_to_input_capture_mode(TIMER);
-	set_to_counter_mode(TIMER);
+//	set_to_counter_mode(TIMER);
 	log_tim_interrupt(TIMER);
 	enable_input_capture_mode_interrupt(TIMER);
 	clear_cnt(TIMER);
@@ -120,3 +117,34 @@ static void initCounterTimer(enum TIMs TIMER) {
 	// register and enable within the NVIC
 	log_tim_interrupt(TIMER);
 }
+
+void initExternalInterrupt(){
+	// Enable Clock to SysCFG
+	*(RCC_APB2ENR) |= 1<<14;
+
+	// Enable Clocks for GPIOC
+	init_GPIO(C);
+
+	// TODO: if debugging, set PC9 to input to supply test signals
+	enable_input_mode(C, 4);
+
+	// Connect Syscfg to EXTI4, C-line
+	*(SYSCFG_EXTICR2) &= ~(0b1111<<0);
+	*(SYSCFG_EXTICR2) |= (0b0010<<0);
+
+	// Unmask EXTI4 in EXTI
+	*(EXTI_IMR) |= 1<<4;
+
+	// Set falling edge
+	*(EXTI_FTSR) |= 1<<4;
+
+	// Set to rising edge
+	*(EXTI_RTSR) |= 1<<4;
+
+	// Set priority to max
+	*(NVIC_IPR5) |= 0xFF << 10;
+
+	// Enable Interrupt in NVIC (Vector table interrupt enable)
+	*(NVIC_ISER0) |= 1<<10;
+}
+

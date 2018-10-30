@@ -142,29 +142,29 @@ g_pfnVectors:
 	.word	0
 	.word	PendSV_Handler
 	.word	SysTick_Handler
-	.word	WWDG_IRQHandler                   // Window WatchDog
-    .word	PVD_IRQHandler                 // PVD through EXTI Line detection
-    .word	TAMP_STAMP_IRQHandler             // Tamper and TimeStamps through the EXTI line
-    .word	RTC_WKUP_IRQHandler               // RTC Wakeup through the EXTI line
-    .word	FLASH_IRQHandler                 // FLASH
-    .word	RCC_IRQHandler                    // RCC
-    .word	EXTI0_IRQHandler                 // EXTI Line0
-    .word	EXTI1_IRQHandler                  // EXTI Line1
-    .word	EXTI2_IRQHandler                  // EXTI Line2
-    .word	EXTI3_IRQHandler                  // EXTI Line3
-    .word	EXTI4_IRQHandler                  // EXTI Line4
-    .word	DMA1_Stream0_IRQHandler           // DMA1 Stream 0
-    .word	DMA1_Stream1_IRQHandler           // DMA1 Stream 1
-    .word	DMA1_Stream2_IRQHandler           // DMA1 Stream 2
-    .word	DMA1_Stream3_IRQHandler           // DMA1 Stream 3
-    .word	DMA1_Stream4_IRQHandler           // DMA1 Stream 4
-    .word	DMA1_Stream5_IRQHandler           // DMA1 Stream 5
-    .word	DMA1_Stream6_IRQHandler           // DMA1 Stream 6
-    .word	ADC_IRQHandler                    // ADC1, ADC2 and ADC3s
-    .word	CAN1_TX_IRQHandler                // CAN1 TX
-    .word	CAN1_RX0_IRQHandler               // CAN1 RX0
-    .word	CAN1_RX1_IRQHandler               // CAN1 RX1
-    .word	CAN1_SCE_IRQHandler               // CAN1 SCE
+	.word	WWDG_IRQHandler                   // Window WatchDog 0
+    .word	PVD_IRQHandler                 // PVD through EXTI Line detection 1
+    .word	TAMP_STAMP_IRQHandler             // Tamper and TimeStamps through the EXTI line 2
+    .word	RTC_WKUP_IRQHandler               // RTC Wakeup through the EXTI line 3
+    .word	FLASH_IRQHandler                 // FLASH 4
+    .word	RCC_IRQHandler                    // RCC 5
+    .word	EXTI0_IRQHandler                 // EXTI Line0 6
+    .word	EXTI1_IRQHandler                  // EXTI Line1 7
+    .word	EXTI2_IRQHandler                  // EXTI Line2 8
+    .word	EXTI3_IRQHandler                  // EXTI Line3 9
+    .word	EXTI4_IRQHandler                  // EXTI Line4 10
+    .word	DMA1_Stream0_IRQHandler           // DMA1 Stream 0 11
+    .word	DMA1_Stream1_IRQHandler           // DMA1 Stream 1 12
+    .word	DMA1_Stream2_IRQHandler           // DMA1 Stream 2 13
+    .word	DMA1_Stream3_IRQHandler           // DMA1 Stream 3 14
+    .word	DMA1_Stream4_IRQHandler           // DMA1 Stream 4 15
+    .word	DMA1_Stream5_IRQHandler           // DMA1 Stream 5 16
+    .word	DMA1_Stream6_IRQHandler           // DMA1 Stream 6 17
+    .word	ADC_IRQHandler                    // ADC1, ADC2 and ADC3s 18
+    .word	CAN1_TX_IRQHandler                // CAN1 TX 19
+    .word	CAN1_RX0_IRQHandler               // CAN1 RX0 20
+    .word	CAN1_RX1_IRQHandler               // CAN1 RX1 21
+    .word	CAN1_SCE_IRQHandler               // CAN1 SCE 22
     .word	EXTI9_5_IRQHandler                // External Line[9:5]s 23
     .word	TIM1_BRK_TIM9_IRQHandler          // TIM1 Break and TIM9 24
     .word	TIM1_UP_TIM10_IRQHandler          // TIM1 Update and TIM10 25
