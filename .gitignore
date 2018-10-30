@@ -1,0 +1,8 @@
+# STM32 Eclipse Editor files
+.cproject
+.metadata/
+.project
+.settings/
+
+# Object files generated through build
+Debug/
