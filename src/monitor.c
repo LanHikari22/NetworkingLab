@@ -69,8 +69,8 @@ void setupPinInterrupt(){
 	// Set to rising edge
 	*(EXTI_RTSR) |= 1<<9;
 
-	// Set priority to max
-	*(NVIC_IPR5) |= 0xFF << 23;
+	// Set priority to max TODO: this was wrong, but worked by coincidence (23->24)
+	*(NVIC_IPR5) |= 0xFF << 24;
 
 	// Enable Interrupt in NVIC (Vector table interrupt enable)
 	*(NVIC_ISER0) |= 1<<23;

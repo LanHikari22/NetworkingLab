@@ -13,7 +13,7 @@
 #define EXTI_IMR		(volatile uint32_t *)0x40013c00 // Interrupt mask register
 #define EXTI_FTSR       (volatile uint32_t *)0x40013c0c // Falling trigger select register
 #define EXTI_RTSR		(volatile uint32_t *)0x40013c08
-#define EXTI_PR           (volatile uint32_t *)0x40013c14 // Interrupt pending register
+#define EXTI_PR         (volatile uint32_t *)0x40013c14 // Interrupt pending register
 
 // ***RCC registers***
 #define RCC_APB2ENR	    (volatile uint32_t *)0x40023844
@@ -30,9 +30,13 @@
 
 // **NVIC**
 #define NVIC_ISER0 		((volatile uint32_t*)0xE000E100)
+#define NVIC_IPR0 		((volatile uint32_t*)0xE000E400)
 #define NVIC_IPR1 		((volatile uint32_t*)0xE000E404)
-#define NVIC_ISER1 		((volatile uint32_t*)0xE000E104)
+#define NVIC_IPR2 		((volatile uint32_t*)0xE000E408)
+#define NVIC_IPR3 		((volatile uint32_t*)0xE000E40C)
+#define NVIC_IPR4 		((volatile uint32_t*)0xE000E410)
 #define NVIC_IPR5 		((volatile uint32_t*)0xE000E414)
+#define NVIC_ISER1 		((volatile uint32_t*)0xE000E11C)
 
 
 #endif // IO_DEFINITIONS
