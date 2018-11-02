@@ -5,6 +5,7 @@
 #include "gpio.h"
 #include "monitor.h"
 #include "uart_driver.h"
+#include "monitor.h"
 #include "io_definitions.h"
 #include <inttypes.h>
 #include <stdio.h>
@@ -18,7 +19,8 @@ static int currBit;
 static uint8_t dataByte = 0;
 // flag to sample on the line per the input capture ISR
 static bool sample = true;
-
+// flag that indicates the start of a message
+static bool inTransmission = false;
 // Forward reference
 static void initExternalInterrupt();
 //static void initInputCapture(enum TIMs);
@@ -29,6 +31,9 @@ static inline void startTimeoutTimer(uint32_t);
 // initiates the receiver module
 void receiver_init() {
 	init_usart2(19200, F_CPU);
+	// Debug PC6
+	init_GPIO(C);
+	enable_output_mode(C, 6);
 	// the receive pin has to change based on the specific timer. PC6 AF 2 is for TIM3_CH1
 //	init_GPIO(C);
 //	enable_af_mode(C, 6, 2);
@@ -39,24 +44,38 @@ void receiver_init() {
 
 // Main routine update, this should execute inside a while(1); by what uses this module.
 void receiver_mainRoutineUpdate() {
-	if (monitorState == TS_IDLE) {
+	if (monitor_IDLE()) {
+		// reset the transmission state, since we're IDLE. Next transmission is a new transmission
+		currBit = dataByte = 0;
+		receiveBuf.get = receiveBuf.put = 0;
+		inTransmission = false;
+
 		// set for beginning of transmission, first bit automatically captured as zero
 		if (!sample)
 			sample = true;
+
+	}
+
+	if (!inTransmission) {
+
+		// grab the transmitted message, and display it
 		bool dataPresent = hasElement(&receiveBuf);
 		while (hasElement(&receiveBuf)) {
-			printf(get(&receiveBuf));
+			printf("%c", get(&receiveBuf));
 		}
 		if (dataPresent)
-			printf('\n');
+			printf("\n");
 	}
 }
 
 void EXTI4_IRQHandler() {
 
 	// Verify Interrupt is from EXTI4
-	if ((*(EXTI_PR)&(1<<4)) == 0)
+	if (!((*(EXTI_PR)&(1<<4)) != 0))
 		return;
+
+	// Clear Interrupt
+	*(EXTI_PR) |= 1<<4;
 
 	// case when we're in a half clock period edge
 	if (sample) {
@@ -64,12 +83,15 @@ void EXTI4_IRQHandler() {
 		clear_cnt(TIM4);
 		start_counter(TIM4);
 
+		// we should not sample next edge, unless timeout
+		sample = false;
+
 		// sample bit
-		if ((select_gpio(RECEIVE_GPIO)->IDR) & ((1<<RECEIVE_PIN) != 0)) {
-			dataByte |= (1<<currBit);
+		if ((GPIOC_BASE->IDR) & ((1<<4) != 0)) {
+			dataByte |= (1<< (7-currBit));
 		}
 		else {
-			dataByte &= ~(1<<currBit);
+			dataByte &= ~(1<< (7-currBit));
 		}
 
 		currBit++;
@@ -78,8 +100,13 @@ void EXTI4_IRQHandler() {
 			put(&receiveBuf, dataByte);
 			currBit = 0;
 		}
-		// we should not sample next edge, unless timeout
-		sample = false;
+
+		// If this is the very first bit, indicate the start of a transmission
+		if (!inTransmission)
+			inTransmission = true;
+
+		// TODO: debug, toggle PC6 to track ISR calls
+		GPIOC_BASE->ODR ^= 1<<6;
 	}
 	// case when we're in a clock period edge
 	else {
@@ -89,6 +116,7 @@ void EXTI4_IRQHandler() {
 		// disable timeout, next edge occurs 100% of the time as per the manchester encoding
 		// TODO: use input capture, set timeout based on stamp of when edge occurred
 		stop_counter(TIM4);
+
 	}
 }
 
@@ -97,6 +125,9 @@ void EXTI4_IRQHandler() {
 // Counter Timer for Half bit timeout. Indicates whether to sample on the next half clock period or not
 void TIM4_IRQHandler() {
 	clear_output_cmp_mode_pending_flag(TIM4);
+
+	// TODO: debug, toggle PC6 to track ISR calls
+	GPIOC_BASE->ODR ^= 1<<6;
 
 	// if this timeout occurs, we're at bit period edge, the next must be a sample.
 	sample = true;
@@ -160,7 +191,7 @@ static void initExternalInterrupt(){
 	*(EXTI_RTSR) |= 1<<4;
 
 	// Set priority to max (IP[2*4+2] = IP2[24:], where each field is 8-bits, and NVIC idx 10 is field 2
-	*(NVIC_IPR2) |= 0xFF << 24;
+	*(NVIC_IPR2) |= 0xF0 << 24;
 
 	// Enable Interrupt in NVIC (Vector table interrupt enable)
 	*(NVIC_ISER0) |= 1<<10;

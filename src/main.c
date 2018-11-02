@@ -10,7 +10,7 @@ static uint16_t encodeManchester(uint8_t data);
 // main
 int main(void){
 	// Initiate/start modules
-	monitor_start();
+ 	monitor_start();
 //	transmitter_init();
 	receiver_init();
 	init_usart2(19200, F_CPU);
@@ -19,10 +19,9 @@ int main(void){
 	// Main routine
 	while (1) {
 //		transmitter_mainRoutineUpdate();
-		printf("Enter char:\n");
-		uint8_t c = usart2_getch();
-		printf("Encoded Manchester: \"%x\"\n", encodeManchester(c));
-
+//		printf("Enter char:\n");
+//		uint8_t c = usart2_getch();
+//		printf("\nEncoded Manchester: \"%c\" -> \"%x\"\n", c, encodeManchester(c));
 		receiver_mainRoutineUpdate();
 	}
 }

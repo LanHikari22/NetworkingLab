@@ -101,6 +101,7 @@ void TIM2_IRQHandler(){
 	}
 
 	// Transmit the one bit by setting its value in the transmission line
+	// TODO: transmit on reverse, otherwise the data will always have to be even, instead of bit 8 having to always be 0
 	if ((transBuf.buffer[currByte] & (1<<currBit)) != 0)
 		select_gpio(TRANSMISSION_GPIO)->ODR |= 1<<TRANSMISSION_PIN;
 	else

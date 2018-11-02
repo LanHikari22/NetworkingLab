@@ -36,8 +36,8 @@ void monitor_start() {
 		init_GPIO(C);
 
 		// clear and set PC8 to output for debugging
-		enable_output_mode(C, 8);
-		GPIOC_BASE->ODR &= ~(1<<8);
+//		enable_output_mode(C, 8);
+//		GPIOC_BASE->ODR &= ~(1<<8);
 
 		monitorState = TS_IDLE;
 		GPIOB_BASE->ODR &= ~(0b111 << 13);
@@ -53,7 +53,7 @@ void setupPinInterrupt(){
 	// Enable Clocks for GPIOC
 	init_GPIO(C);
 
-	// TODO: if debugging, set PC9 to input to supply test signals
+	// PC9 is input signal to monitor
 	enable_input_mode(C, 9);
 
 	// Connect PC9 to EXTI9
@@ -70,7 +70,7 @@ void setupPinInterrupt(){
 	*(EXTI_RTSR) |= 1<<9;
 
 	// Set priority to max TODO: this was wrong, but worked by coincidence (23->24)
-	*(NVIC_IPR5) |= 0xFF << 24;
+	*(NVIC_IPR5) |= 0xF0 << 24;
 
 	// Enable Interrupt in NVIC (Vector table interrupt enable)
 	*(NVIC_ISER0) |= 1<<23;
@@ -143,3 +143,16 @@ void EXTI9_5_IRQHandler(){
 		GPIOB_BASE->ODR |= (LED_BUSY_PB14);
 	}
 }
+
+bool monitor_IDLE() {
+	return (GPIOB_BASE->ODR & LED_IDLE_PB13) != 0;
+}
+
+bool monitor_BUSY() {
+	return (GPIOB_BASE->ODR & LED_BUSY_PB14) != 0;
+}
+
+bool monitor_COLLISION() {
+	return (GPIOB_BASE->ODR & LED_COLLISION_PB15) != 0;
+}
+
