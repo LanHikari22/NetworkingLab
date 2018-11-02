@@ -68,6 +68,10 @@ void receiver_mainRoutineUpdate() {
 	}
 }
 
+/**
+ * Edge interrupt ISR for sampling. This samples every half-bit period, and starts a timeout to trigger after an
+ * even bit period if no edge occurs. This is to make sure that sampling occurs strictly on every half bit period (every odd interval).
+ */
 void EXTI4_IRQHandler() {
 
 	// Verify Interrupt is from EXTI4
@@ -80,7 +84,6 @@ void EXTI4_IRQHandler() {
 	// case when we're in a half clock period edge
 	if (sample) {
 		// set timeout based on stamp of when edge occurred
-		clear_cnt(TIM4);
 		start_counter(TIM4);
 
 		// we should not sample next edge, unless timeout
@@ -121,8 +124,14 @@ void EXTI4_IRQHandler() {
 }
 
 
-
-// Counter Timer for Half bit timeout. Indicates whether to sample on the next half clock period or not
+/**
+ * Counter Timer for Half bit timeout. Indicates whether to sample on the next half clock period or not.
+ * This ISR triggers only on every even half-bit interval, where an edge interrupt would not trigger. It tells the edge interrupt
+ * that the next time it triggers, it can sample.
+ * This is done by setting the timeout at the maximum tolerance for a half-bit period.
+ * If this gets called, it is safe to assume the edge interrupt did not.
+ * If the edge interrupt triggers first, it disables the timer, and thus this never does not trigger, and the sampling ISR does not sample on that edge.
+ */
 void TIM4_IRQHandler() {
 	clear_output_cmp_mode_pending_flag(TIM4);
 
@@ -134,6 +143,7 @@ void TIM4_IRQHandler() {
 
 	// timeout occurred, shouldn't occur again unless a half bit period measures to a bit period.
 	stop_counter(TIM4);
+	clear_cnt(TIM4);
 }
 
 // Input Capture Timer ISR used for receiving. Update if using a different timer
