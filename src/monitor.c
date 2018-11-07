@@ -4,26 +4,21 @@
 #include "io_definitions.h"
 #include <inttypes.h>
 
-// LED Light Status
-#define LED_IDLE_PB13 (1<<13)
-#define LED_BUSY_PB14 (1<<14)
-#define LED_COLLISION_PB15 (1<<15)
-
-// Output mode for LEDs
-#define GPIOB_LEDS_OUTPUT_MODE (0b010101 << 26)
-
-void setupPinInterrupt();
-void SysTick_Handler();
-void EXTI9_5_IRQHandler();
-void configTimer(uint32_t);
-void resetTimer(uint32_t);
 
 TRANSMISSION_STATE monitorState;
 
 // either 1 or 0, updated by the pin interrupt
 static int lineState;
 
-void monitor_start() {
+// This macro lets the reciever handles its own interrupt driven logic with PC9.
+// if disabled, no interrupt is hooked on PC9 even though the PC9 line is monitered.
+// (instead, the pin interrupt logic monitor_Edge_Intrr is exposed to be used for a pin connected to PC9)
+// TODO: turn into module input
+static bool exti9Enable;
+
+
+void monitor_start(bool exti9_enable) {
+		exti9Enable = exti9_enable;
 		// enable GPIOB and set LEDs for updating monitor status
 		init_GPIO(B);
 		GPIOB_BASE->MODER |= GPIOB_LEDS_OUTPUT_MODE;
@@ -56,24 +51,28 @@ void setupPinInterrupt(){
 	// PC9 is input signal to monitor
 	enable_input_mode(C, 9);
 
-	// Connect PC9 to EXTI9
-	*(SYSCFG_EXTICR3) &= ~(0b1111<<4);
-	*(SYSCFG_EXTICR3) |= (0b0010<<4);
+	// in case the monitor module handles its own pin interrupt.
+	if (exti9Enable) {
 
-	// Unmask EXTI9 in EXTI
-	*(EXTI_IMR) |= 1<<9;
+		// Connect PC9 to EXTI9
+		*(SYSCFG_EXTICR3) &= ~(0b1111<<4);
+		*(SYSCFG_EXTICR3) |= (0b0010<<4);
 
-	// Set falling edge
-	*(EXTI_FTSR) |= 1<<9;
+		// Unmask EXTI9 in EXTI
+		*(EXTI_IMR) |= 1<<9;
 
-	// Set to rising edge
-	*(EXTI_RTSR) |= 1<<9;
+		// Set falling edge
+		*(EXTI_FTSR) |= 1<<9;
 
-	// Set priority to max TODO: this was wrong, but worked by coincidence (23->24)
-	*(NVIC_IPR5) |= 0xF0 << 24;
+		// Set to rising edge
+		*(EXTI_RTSR) |= 1<<9;
 
-	// Enable Interrupt in NVIC (Vector table interrupt enable)
-	*(NVIC_ISER0) |= 1<<23;
+		// Set priority to max TODO: this was wrong, but worked by coincidence (23->24)
+		*(NVIC_IPR5) |= 0xF0 << 24;
+
+		// Enable Interrupt in NVIC (Vector table interrupt enable)
+		*(NVIC_ISER0) |= 1<<23;
+	}
 }
 
 // configures the systick timer load value to the specified t_us and resets its val
@@ -128,20 +127,23 @@ void SysTick_Handler() {
  * EXTI9_5 ISR -- Updates the line state and sets the transmission state to busy
  * also resets the timeout systick timer
  */
-void EXTI9_5_IRQHandler(){
+void EXTI9_5_IRQHandler() {
 	// Verify Interrupt is from EXTI9
 	if ((*(EXTI_PR)&(1<<9)) != 0) {
-		// reset counter
-		resetTimer(TRANSMISSION_TIMEOUT_US);
+		monitor_Edge_Intrr();
 		// Clear Interrupt
 		*(EXTI_PR) |= 1<<9;
+	}
+}
+void monitor_Edge_Intrr(){
+		// reset counter
+		resetTimer(TRANSMISSION_TIMEOUT_US);
 		// update line state
 		lineState = (GPIOC_BASE->IDR &(1<<9))>>9;
 		// change state
 		monitorState = TS_BUSY;
 		GPIOB_BASE->ODR &= ~(0b111 << 13);
 		GPIOB_BASE->ODR |= (LED_BUSY_PB14);
-	}
 }
 
 bool monitor_IDLE() {

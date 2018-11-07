@@ -27,7 +27,8 @@ extern TRANSMISSION_STATE monitorState;
 // The monitor enters the TS_IDLE or TS_COLLISION states when that happens
 #define TRANSMISSION_TIMEOUT_US 1110
 
-void monitor_start();
+
+void monitor_start(bool exti9_enable);
 
 // returns true if in IDLE state by checking the idle signal
 bool monitor_IDLE();
@@ -38,4 +39,18 @@ bool monitor_BUSY();
 // returns true if in COLLISION state by checking collision signal
 bool monitor_COLLISION();
 
+// LED Light Status
+#define LED_IDLE_PB13 (1<<13)
+#define LED_BUSY_PB14 (1<<14)
+#define LED_COLLISION_PB15 (1<<15)
+
+// Output mode for LEDs
+#define GPIOB_LEDS_OUTPUT_MODE (0b010101 << 26)
+
+void setupPinInterrupt();
+void SysTick_Handler();
+void EXTI9_5_IRQHandler();
+void configTimer(uint32_t);
+void resetTimer(uint32_t);
+void monitor_Edge_Intrr();
 #endif // MONITOR_H

@@ -100,6 +100,7 @@ typedef struct
 // Timer based addresses
 #define TIM2_BASE ((volatile TIMER2to5 *) 0x40000000)
 #define TIM3_BASE ((volatile TIMER2to5 *) 0x40000400)
+#define TIM4_BASE ((volatile TIMER2to5 *) 0x40000800)
 #define TIM9_BASE ((volatile TIMER2to5 *) 0x40014000)
 
 // The interrupt enable bits

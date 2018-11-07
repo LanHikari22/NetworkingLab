@@ -31,9 +31,12 @@ static inline void startTimeoutTimer(uint32_t);
 // initiates the receiver module
 void receiver_init() {
 	init_usart2(19200, F_CPU);
-	// Debug PC6
 	init_GPIO(C);
+	// TODO Debug PC6 - Sample Toggle
 	enable_output_mode(C, 6);
+	// TODO Debug PC8 - Even bitperiod Counter Toggle
+	enable_output_mode(C, 8);
+
 	// the receive pin has to change based on the specific timer. PC6 AF 2 is for TIM3_CH1
 //	init_GPIO(C);
 //	enable_af_mode(C, 6, 2);
@@ -47,7 +50,6 @@ void receiver_mainRoutineUpdate() {
 	if (monitor_IDLE()) {
 		// reset the transmission state, since we're IDLE. Next transmission is a new transmission
 		currBit = dataByte = 0;
-		receiveBuf.get = receiveBuf.put = 0;
 		inTransmission = false;
 
 		// set for beginning of transmission, first bit automatically captured as zero
@@ -59,19 +61,16 @@ void receiver_mainRoutineUpdate() {
 	if (!inTransmission) {
 
 		// grab the transmitted message, and display it
-		bool dataPresent = hasElement(&receiveBuf);
-		while (hasElement(&receiveBuf)) {
-			printf("%c", get(&receiveBuf));
-		}
-		if (dataPresent)
+		if (hasElement(&receiveBuf)) {
+			printf("[echo] ");
+			while (hasElement(&receiveBuf)) {
+				printf("%c", get(&receiveBuf));
+			}
 			printf("\n");
+		}
 	}
 }
 
-/**
- * Edge interrupt ISR for sampling. This samples every half-bit period, and starts a timeout to trigger after an
- * even bit period if no edge occurs. This is to make sure that sampling occurs strictly on every half bit period (every odd interval).
- */
 void EXTI4_IRQHandler() {
 
 	// Verify Interrupt is from EXTI4
@@ -81,16 +80,20 @@ void EXTI4_IRQHandler() {
 	// Clear Interrupt
 	*(EXTI_PR) |= 1<<4;
 
+	// monitor the state of transmission
+	monitor_Edge_Intrr();
+
 	// case when we're in a half clock period edge
 	if (sample) {
 		// set timeout based on stamp of when edge occurred
+		clear_cnt(TIM4);
 		start_counter(TIM4);
 
 		// we should not sample next edge, unless timeout
 		sample = false;
 
 		// sample bit
-		if ((GPIOC_BASE->IDR) & ((1<<4) != 0)) {
+		if ( !!(GPIOC_BASE->IDR & (1<<4))) {
 			dataByte |= (1<< (7-currBit));
 		}
 		else {
@@ -124,26 +127,19 @@ void EXTI4_IRQHandler() {
 }
 
 
-/**
- * Counter Timer for Half bit timeout. Indicates whether to sample on the next half clock period or not.
- * This ISR triggers only on every even half-bit interval, where an edge interrupt would not trigger. It tells the edge interrupt
- * that the next time it triggers, it can sample.
- * This is done by setting the timeout at the maximum tolerance for a half-bit period.
- * If this gets called, it is safe to assume the edge interrupt did not.
- * If the edge interrupt triggers first, it disables the timer, and thus this never does not trigger, and the sampling ISR does not sample on that edge.
- */
+
+// Counter Timer for Half bit timeout. Indicates whether to sample on the next half clock period or not
 void TIM4_IRQHandler() {
 	clear_output_cmp_mode_pending_flag(TIM4);
 
 	// TODO: debug, toggle PC6 to track ISR calls
-	GPIOC_BASE->ODR ^= 1<<6;
+	GPIOC_BASE->ODR ^= 1<<8;
 
 	// if this timeout occurs, we're at bit period edge, the next must be a sample.
 	sample = true;
 
 	// timeout occurred, shouldn't occur again unless a half bit period measures to a bit period.
 	stop_counter(TIM4);
-	clear_cnt(TIM4);
 }
 
 // Input Capture Timer ISR used for receiving. Update if using a different timer

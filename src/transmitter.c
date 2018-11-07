@@ -27,9 +27,14 @@ static void stopTransmission();
 void transmitter_init() {
 	init_usart2(19200, F_CPU);
 	initTransmissionTimer();
+
 	// Enable transmission pin
 	init_GPIO(TRANSMISSION_GPIO);
 	enable_output_mode(TRANSMISSION_GPIO, TRANSMISSION_PIN);
+
+	// Debug PC8 - Sync Signal
+	init_GPIO(C);
+	enable_output_mode(C, 8);
 }
 
 void transmitter_mainRoutineUpdate() {
@@ -102,7 +107,7 @@ void TIM2_IRQHandler(){
 
 	// Transmit the one bit by setting its value in the transmission line
 	// TODO: transmit on reverse, otherwise the data will always have to be even, instead of bit 8 having to always be 0
-	if ((transBuf.buffer[currByte] & (1<<currBit)) != 0)
+	if ((transBuf.buffer[currByte] & (1<<(7-currBit))) != 0) // TODO: currBit -> (7-currBit), transmit backwards
 		select_gpio(TRANSMISSION_GPIO)->ODR |= 1<<TRANSMISSION_PIN;
 	else
 		select_gpio(TRANSMISSION_GPIO)->ODR &= ~(1<<TRANSMISSION_PIN);
@@ -124,8 +129,9 @@ void TIM2_IRQHandler(){
 static void transmitByte(uint8_t byte) {
 	uint16_t manchesterSymbol = encodeManchester(byte);
 	// set the uint16_t manchester encoded byte for transmission
-	put(&transBuf, manchesterSymbol & 0xFF);
 	put(&transBuf, manchesterSymbol >> 8);
+	put(&transBuf, manchesterSymbol & 0xFF);
+	// TODO: changed order of bytes to transmit
 }
 
 /**
@@ -140,8 +146,8 @@ static uint16_t encodeManchester(uint8_t data){
 	uint16_t output = 0;
 	for (int i=0; i<8; i++) {
 		int bit = (data & (1<<i)) >> i;
-		output |= (1^bit) << (i*2);
-		output |= (0^bit) << (i*2+1);
+		output |= (0^bit) << (i*2);
+		output |= (1^bit) << (i*2+1); // TODO 1 0 -> 0 1
 	}
 	return output;
 }

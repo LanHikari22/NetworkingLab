@@ -30,6 +30,9 @@ void enable_timer_clk(enum TIMs tim)
     case TIM3:
         *RCC_APB1ENR |= 1 << TIM3EN; // enable the timer.
         break;
+    case TIM4:
+    	*RCC_APB1ENR |= 1 << TIM4EN;
+    	break;
     default:
         // Keep empty
         break;
@@ -51,6 +54,9 @@ void set_ccr1(enum TIMs tim, uint32_t ticks)
     case TIM3:
         TIM3_BASE->CCR1 = ticks;
         break;
+    case TIM4:
+    	TIM4_BASE->CCR1 = ticks;
+    	break;
     default:
         // Keep empty
         break;
@@ -72,6 +78,9 @@ void set_arr(enum TIMs tim, uint32_t ticks)
     case TIM3:
         TIM3_BASE->ARR = ticks;
         break;
+    case TIM4:
+    	TIM4_BASE->ARR = ticks;
+    	break;
     default:
         // Keep empty
         break;
@@ -88,6 +97,9 @@ void clear_cnt(enum TIMs tim)
     case TIM3:
         TIM3_BASE->CNT = 0;
         break;
+    case TIM4:
+    	TIM4_BASE->CNT = 0;
+    	break;
     default:
         break;
     }
@@ -103,6 +115,9 @@ void set_psc(enum TIMs tim, uint32_t ticks)
     case TIM3:
         TIM3_BASE->PSC = ticks;
         break;
+    case TIM4:
+    	TIM4_BASE->PSC = ticks;
+    	break;
     default:
         break;
     }
@@ -120,6 +135,9 @@ void log_tim_interrupt(enum TIMs tim)
         break;
     case TIM3:
         *ISER0 |= 1 << TIM3_INTERRUPT_EN;
+        break;
+    case TIM4:
+        *ISER0 |= 1 << TIM4_INTERRUPT_EN;
         break;
     default:
         break;
@@ -139,6 +157,9 @@ void start_counter(enum TIMs tim)
     case TIM3:
         TIM3_BASE->CR1 |= 1 << CEN;
         break;
+    case TIM4:
+    	TIM4_BASE->CR1 |= 1 << CEN;
+    	break;
     default:
         break;
     }
@@ -157,6 +178,9 @@ void stop_counter(enum TIMs tim)
     case TIM3:
         TIM3_BASE->CR1 &= ~(1 << CEN);
         break;
+    case TIM4:
+    	TIM4_BASE->CR1 &= ~(1 << CEN);
+    	break;
     default:
         break;
     }
@@ -174,6 +198,9 @@ void set_to_counter_mode(enum TIMs tim)
     case TIM3:
         TIM3_BASE->CR1 |= 1 << URS;
         break;
+    case TIM4:
+        TIM4_BASE->CR1 |= 1 << URS;
+        break;
     default:
         break;
     }
@@ -188,6 +215,9 @@ void enable_counter_mode_interrupt(enum TIMs tim)
         break;
     case TIM3:
         TIM3_BASE->DIER |= 1 << UIE;
+        break;
+    case TIM4:
+        TIM4_BASE->DIER |= 1 << UIE;
         break;
     default:
         break;
@@ -204,6 +234,9 @@ void disable_counter_mode_interrupt(enum TIMs tim)
     case TIM3:
         TIM3_BASE->DIER &= ~(1 << UIE);
         break;
+    case TIM4:
+        TIM4_BASE->DIER &= ~(1 << UIE);
+        break;
     default:
         break;
     }
@@ -218,6 +251,9 @@ void clear_counter_mode_pending_flag(enum TIMs tim)
         break;
     case TIM3:
         TIM3_BASE->SR &= ~(1 << UIF);
+        break;
+    case TIM4:
+        TIM4_BASE->SR &= ~(1 << UIF);
         break;
     default:
         break;
@@ -238,6 +274,9 @@ void set_to_input_capture_mode(enum TIMs tim)
     case TIM3:
         input_capture_mode(&(TIM3_BASE->CCMR1), &(TIM3_BASE->CCER), BOTH);
         break;
+    case TIM4:
+        input_capture_mode(&(TIM4_BASE->CCMR1), &(TIM4_BASE->CCER), BOTH);
+        break;
     default:
         break;
     }
@@ -252,6 +291,9 @@ void enable_input_capture_mode_interrupt(enum TIMs tim)
         break;
     case TIM3:
         TIM3_BASE->DIER |= 1 << CC1IE;
+        break;
+    case TIM4:
+        TIM4_BASE->DIER |= 1 << CC1IE;
         break;
     default:
         break;
@@ -268,6 +310,9 @@ void disable_input_capture_mode_interrupt(enum TIMs tim)
     case TIM3:
         TIM3_BASE->DIER &= ~(1 << CC1IE);
         break;
+    case TIM4:
+        TIM4_BASE->DIER &= ~(1 << CC1IE);
+        break;
     default:
         break;
     }
@@ -282,6 +327,9 @@ void clear_input_capture_mode_pending_flag(enum TIMs tim)
         break;
     case TIM3:
         TIM3_BASE->SR &= ~(1 << CC1IF);
+        break;
+    case TIM4:
+        TIM4_BASE->SR &= ~(1 << CC1IF);
         break;
     default:
         break;
@@ -305,6 +353,9 @@ void set_to_output_cmp_mode(enum TIMs tim)
     case TIM3:
         output_cmp_mode(&(TIM3_BASE->CCMR1));
         break;
+    case TIM4:
+        output_cmp_mode(&(TIM4_BASE->CCMR1));
+        break;
     default:
         break;
     }
@@ -322,6 +373,9 @@ void enable_output_output_cmp_mode(enum TIMs tim)
         break;
     case TIM3:
         TIM3_BASE->CCER |= 1;
+        break;
+    case TIM4:
+        TIM4_BASE->CCER |= 1;
         break;
     default:
         break;
@@ -341,6 +395,9 @@ void disable_output_output_cmp_mode(enum TIMs tim)
     case TIM3:
         TIM3_BASE->CCER &= ~1;
         break;
+    case TIM4:
+        TIM4_BASE->CCER &= ~1;
+        break;
     default:
         break;
     }
@@ -358,6 +415,9 @@ void clear_output_cmp_mode_pending_flag(enum TIMs tim)
         break;
     case TIM3:
         TIM3_BASE->SR &= ~(1 << UIF);
+        break;
+    case TIM4:
+        TIM4_BASE->SR &= ~(1 << UIF);
         break;
     default:
         break;
@@ -377,6 +437,9 @@ void enable_output_cmp_mode_interrupt(enum TIMs tim)
     case TIM3:
         TIM3_BASE->DIER |= 1;
         break;
+    case TIM4:
+        TIM4_BASE->DIER |= 1;
+        break;
     default:
         break;
     }
@@ -394,6 +457,9 @@ void disable_output_cmp_mode_interrupt(enum TIMs tim)
         break;
     case TIM3:
         TIM3_BASE->DIER &= ~1;
+        break;
+    case TIM4:
+        TIM4_BASE->DIER &= ~1;
         break;
     default:
         break;

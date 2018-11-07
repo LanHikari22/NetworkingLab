@@ -4,24 +4,26 @@
 #include "receiver.h"
 #include <inttypes.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 static uint16_t encodeManchester(uint8_t data);
 
 // main
 int main(void){
 	// Initiate/start modules
- 	monitor_start();
-//	transmitter_init();
-	receiver_init();
 	init_usart2(19200, F_CPU);
-
+	const bool EXTI9_ENABLE = true; // true if transmitter is used alone
+	monitor_start(EXTI9_ENABLE);
+	transmitter_init();
+	receiver_init();
 
 	// Main routine
 	while (1) {
-//		transmitter_mainRoutineUpdate();
 //		printf("Enter char:\n");
 //		uint8_t c = usart2_getch();
 //		printf("\nEncoded Manchester: \"%c\" -> \"%x\"\n", c, encodeManchester(c));
+
+		transmitter_mainRoutineUpdate();
 		receiver_mainRoutineUpdate();
 	}
 }
