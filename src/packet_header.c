@@ -24,15 +24,17 @@ void ph_init() {
 }
 
 /**
- * initiates a PacketHeader object
+ * creates a PacketHeader object
  * @param src Source address of the packet header
  * @param dest Destination address of the packet header
  * @param crc_flag if true, compute CRC. else set to 0x00
- * @param msg A message buffer representing the message to put within the header.
- * @param size The size of the message. Max 255 bytes.
+ * @param msg A message buffer representing the message to put within the header
+ * @param size The size of the message. Max 255 bytes
  */
 PacketHeader* ph_create(uint8_t src, uint8_t dest, bool crc_flag, const void* msg, uint8_t size) {
 	PacketHeader *pkt = (PacketHeader*)malloc(sizeof(PacketHeader));
+	pkt->synch = 0x55;
+	pkt->ver = 0x01;
 	pkt->src = src;
 	pkt->dest = dest;
 	pkt->length = size;
@@ -41,9 +43,36 @@ PacketHeader* ph_create(uint8_t src, uint8_t dest, bool crc_flag, const void* ms
 	memcpy(copiedMsg, msg, size);
 	pkt->msg = copiedMsg;
 	if (pkt->crc_flag)
-		pkt->crc8_fcs = ph_compute_crc8(pkt);
+		pkt->crc8_fcs = ph_compute_crc8(pkt->msg, pkt->length);
 	else
 		pkt->crc8_fcs = 0xAA;
+}
+
+/**
+ * creates a serialized PacketHeader object
+ * @param bufSize is written with the size of the buffer
+ * @param src Source address of the packet header
+ * @param dest Destination address of the packet header
+ * @param crc_flag if true, compute CRC. else set to 0x00
+ * @param msg A message buffer representing the message to put within the header
+ * @param size The size of the message. Max 255 bytes
+ */
+void* ph_createBuf(unsigned int *bufSize, uint8_t src, uint8_t dest, bool crc_flag, const void* msg, uint8_t size) {
+	*bufSize = sizeof(PacketHeader) - sizeof(void*) + size;
+	void *buf = (void*)malloc(*bufSize);
+	((PacketHeader*)buf)->synch = 0x55;
+	((PacketHeader*)buf)->ver = 0x01;
+	((PacketHeader*)buf)->src = src;
+	((PacketHeader*)buf)->dest = dest;
+	((PacketHeader*)buf)->length = size;
+	((PacketHeader*)buf)->crc_flag = crc_flag;
+	memcpy(&((PacketHeader*)buf)->msg, msg, size);
+	if (crc_flag)
+		((uint8_t*)buf)[*bufSize-1] = ph_compute_crc8(msg, size);
+	else
+		((uint8_t*)buf)[*bufSize-1] = 0xAA;
+
+	return (void*)buf;
 }
 
 /**
@@ -68,8 +97,8 @@ PacketHeader* ph_parse(const void* buf, unsigned int size) {
 	pkt->length = ((PacketHeader*)buf)->length;
 	pkt->crc_flag = ((PacketHeader*)buf)->crc_flag;
 
-	// make sure that the size accounts for the length of msg + 1 (CRC byte)
-	if (size < sizeof(PacketHeader) - sizeof(void*) + pkt->length + 1) {
+	// make sure that the size accounts for the length of msg
+	if (size < sizeof(PacketHeader) - sizeof(void*) + pkt->length) {
 		free(pkt);
 		return NULL;
 	}
@@ -92,6 +121,27 @@ PacketHeader* ph_parse(const void* buf, unsigned int size) {
 }
 
 /**
+ * Serializes the paket into a buffer for transmission. size is written with the size of the returned buffer.
+ * @param pkt packet to serialize
+ * @param size overwritten of size of buffer
+ * @return malloc'd buffer
+ */
+void* ph_serialize(PacketHeader *pkt, unsigned int *size) {
+	*size = sizeof(PacketHeader) - sizeof(void*) + pkt->length;
+	uint8_t *buf = (uint8_t*)malloc(*size);
+	((PacketHeader*)buf)->synch = pkt->synch;
+	((PacketHeader*)buf)->ver = pkt->ver;
+	((PacketHeader*)buf)->src = pkt->src;
+	((PacketHeader*)buf)->dest = pkt->dest;
+	((PacketHeader*)buf)->length = pkt->length;
+	((PacketHeader*)buf)->crc_flag = pkt->crc_flag;
+	memcpy(&((PacketHeader*)buf)->msg, pkt->msg, pkt->length);
+	((uint8_t*)buf)[*size-1] = pkt->crc8_fcs;
+
+	return (void*)buf;
+}
+
+/**
  * frees PacketHeader malloc'd structs by freeing
  * their message content and the PacketHeader pointer.
  */
@@ -102,21 +152,16 @@ void ph_free(PacketHeader* pkt) {
 
 
 /**
- * Computes the CRC8 checksum for the given packet header.
+ * Computes the CRC8 checksum for the a message.
  */
-uint8_t ph_compute_crc8(const PacketHeader* pkt) {
+uint8_t ph_compute_crc8(void *msg, unsigned int size) {
 	uint8_t crc = 0;
-	for (int byte=0; byte<pkt->length; byte++) {
-		crc ^= ((uint8_t*)pkt->msg)[byte];
+	for (int byte=0; byte<size; byte++) {
+		crc ^= ((uint8_t*)msg)[byte];
 		crc = crc8_lookuptable[crc];
 	}
 	return crc;
 }
-
-/**
- * Confirms that the packet is valid through its crc8 field. If crc8_flag is false, this is automatically true.
- */
-bool ph_confirm_crc8(const PacketHeader* pkt);
 
 /**
  * computes the CRC8 for one byte. This should only be used to populate crc8_lookup_table
