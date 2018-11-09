@@ -11,6 +11,8 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
+#define PH_MSG_SIZE 255
+
 typedef struct {
 	uint8_t synch;
 	uint8_t ver;
@@ -18,18 +20,14 @@ typedef struct {
 	uint8_t dest;
 	uint8_t length;
 	uint8_t crc_flag;
-	void *msg;
+	uint8_t msg[PH_MSG_SIZE];
 	uint8_t crc8_fcs;
 }PacketHeader;
 
-#define PACKET_HEADER_BUF_SIZE	(sizeof(PacketHeader) - sizeof(void*) + 255)
 
 void ph_init();
-PacketHeader* ph_create(uint8_t src, uint8_t dest, bool crc_flag, const void* msg, uint8_t size);
-void ph_createBuf(void *buf, uint8_t src, uint8_t dest, bool crc_flag, const void* msg, uint8_t size);
-PacketHeader* ph_parse(const void* buf, unsigned int size);
-void* ph_serialize(PacketHeader *pkt, unsigned int *size);
-void ph_free(PacketHeader*);
+void ph_create(PacketHeader *out, uint8_t src, uint8_t dest, bool crc_flag, const void* msg, uint8_t size);
+bool ph_parse(PacketHeader *out, const void* buf, unsigned int size);
 uint8_t ph_compute_crc8(void *msg, unsigned int size);
 
 

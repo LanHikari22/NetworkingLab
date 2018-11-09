@@ -4,12 +4,13 @@
 #include "tim.h"
 #include "gpio.h"
 #include "monitor.h"
+#include "packet_header.h"
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
 
-// buffer of the data sent through UART
-static RingBuffer dataBuf = {0, 0};
 // transmission buffer to put the manchester encoded bytes in for transmission
 static RingBuffer transBuf = {0, 0};
 // used by the timer ISR, determines which bit to send at the time of execution
@@ -20,6 +21,7 @@ static bool inTransmission = false;
 
 // Forward references
 static void transmitByte(uint8_t);
+static void transmitMessage(const PacketHeader *pkt);
 static uint16_t encodeManchester(uint8_t);
 static void initTransmissionTimer();
 static void startTransmission();
@@ -39,17 +41,33 @@ void transmitter_init() {
 }
 
 void transmitter_mainRoutineUpdate() {
-	char c = usart2_getch();
 	// only transmit a fully received message from the uart
 	static bool gotMessage = false;
+	// buffer to create packet header out of uart msg
+	static PacketHeader pkt = {0};
+	// buffer of the data sent through UART
+	static uint8_t dataBuf[PH_MSG_SIZE];
+	// cursor that makes sure not to retrieve more than PH_MSG_SIZE bytes into dataBuf
+	static int dataCur = 0;
+
+	char c = usart2_getch();
 
 	// data to transmit received, transmit it
 	if (c == '\r') {
-		gotMessage = true;
+		dataBuf[dataCur++] = '\0';
+
+		// just pressed enter. Don't care about that message
+		if (!strcmp(dataBuf, "\0e\0p")) {
+			dataBuf[0] = dataCur = 0;
+			gotMessage = false;
+		}
+		else {
+			gotMessage = true;
+		}
 	}
-	// read in data until new line
-	else {
-		put(&dataBuf, c);
+	// read in data until new line or max buffer size reached
+	else if (dataCur < PH_MSG_SIZE-1) {
+		dataBuf[dataCur++] = c;
 	}
 
 	// start transmission when in TS_IDLE, and there's something to transmit
@@ -58,15 +76,13 @@ void transmitter_mainRoutineUpdate() {
 		gotMessage = false;
 		// transmit all characters
 		transBuf.put = transBuf.get = 0;
-		while(hasElement(&dataBuf) ){
-			c = get(&dataBuf);
-			// sets the byte for transmission, or blocks if the transmission buffer is full
-			transmitByte(c);
-			printf("%c", c);
-		}
-		// construct the packet buffer
-		printf("\r\n");
-
+		ph_create(&pkt, 0xAA, 0xBB, true, &dataBuf, dataCur);
+		printf("> src=%x, dest=%x, length=%d, crc8=%x\r\n", pkt.src, pkt.dest, pkt.length, pkt.crc8_fcs);
+		printf("> %s\r\n", pkt.msg);
+		// clear message
+		dataBuf[0] = dataCur = 0;
+		// setup for transmission
+		transmitMessage(&pkt);
 		startTransmission();
 	}
 
@@ -135,6 +151,22 @@ static void transmitByte(uint8_t byte) {
 	// set the uint16_t manchester encoded byte for transmission
 	put(&transBuf, manchesterSymbol >> 8);
 	put(&transBuf, manchesterSymbol & 0xFF);
+}
+
+/**
+ * Transmits all of the bytes of the packet header, taking into account
+ * that message is not necessarily maximum length
+ */
+static void transmitMessage(const PacketHeader *pkt) {
+	transmitByte(pkt->synch);
+	transmitByte(pkt->ver);
+	transmitByte(pkt->src);
+	transmitByte(pkt->dest);
+	transmitByte(pkt->length);
+	transmitByte(pkt->crc_flag);
+	for (int i = 0; i<pkt->length; i++)
+		transmitByte(pkt->msg[i]);
+	transmitByte(pkt->crc8_fcs);
 }
 
 /**

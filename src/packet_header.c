@@ -31,119 +31,57 @@ void ph_init() {
  * @param msg A message buffer representing the message to put within the header
  * @param size The size of the message. Max 255 bytes
  */
-PacketHeader* ph_create(uint8_t src, uint8_t dest, bool crc_flag, const void* msg, uint8_t size) {
-	PacketHeader *pkt = (PacketHeader*)malloc(sizeof(PacketHeader));
-	pkt->synch = 0x55;
-	pkt->ver = 0x01;
-	pkt->src = src;
-	pkt->dest = dest;
-	pkt->length = size;
-	pkt->crc_flag = crc_flag;
-	char *copiedMsg = (char*)malloc(sizeof(size));
-	memcpy(copiedMsg, msg, size);
-	pkt->msg = copiedMsg;
-	if (pkt->crc_flag)
-		pkt->crc8_fcs = ph_compute_crc8(pkt->msg, pkt->length);
+void ph_create(PacketHeader *out, uint8_t src, uint8_t dest, bool crc_flag, const void* msg, uint8_t size) {
+	out->synch = 0x55;
+	out->ver = 0x01;
+	out->src = src;
+	out->dest = dest;
+	out->length = size;
+	out->crc_flag = crc_flag;
+	memcpy(out->msg, msg, size);
+	if (out->crc_flag)
+		out->crc8_fcs = ph_compute_crc8(out->msg, out->length);
 	else
-		pkt->crc8_fcs = 0xAA;
-}
-
-/**
- * creates a serialized PacketHeader object
- * @param bufSize is written with the size of the buffer
- * @param src Source address of the packet header
- * @param dest Destination address of the packet header
- * @param crc_flag if true, compute CRC. else set to 0x00
- * @param msg A message buffer representing the message to put within the header
- * @param size The size of the message. Max 255 bytes
- */
-void ph_createBuf(void *buf, uint8_t src, uint8_t dest, bool crc_flag, const void* msg, uint8_t size) {
-	((PacketHeader*)buf)->synch = 0x55;
-	((PacketHeader*)buf)->ver = 0x01;
-	((PacketHeader*)buf)->src = src;
-	((PacketHeader*)buf)->dest = dest;
-	((PacketHeader*)buf)->length = size;
-	((PacketHeader*)buf)->crc_flag = crc_flag;
-	memcpy(&((PacketHeader*)buf)->msg, msg, size);
-	if (crc_flag)
-		((uint8_t*)buf)[PACKET_HEADER_BUF_SIZE-1] = ph_compute_crc8(msg, size);
-	else
-		((uint8_t*)buf)[PACKET_HEADER_BUF_SIZE-1] = 0xAA;
+		out->crc8_fcs = 0xAA;
 }
 
 /**
  * Parses the header from a buffer message.
- * if the format of the header is invalid, NULL is returned.
+ * if the format of the header is invalid, false is returned.
  * Invalid format is:
- * 	- buffer size includes message length + sizeof(PacketHeader) - sizeof(void*)
+ *	- buffer too small to encode full content
  * 	- crc_flag is 0, but crc8_fcs is not 0xAA
  * @param buf The buffer to parse
- * @return a malloc'd PacketHeader or NULL if invalid format
+ * @return parsing status
  */
-PacketHeader* ph_parse(const void* buf, unsigned int size) {
-	// buffer must contain at least absolute size of PacketHeader
-	if (size < sizeof(PacketHeader))
-		return NULL;
+bool ph_parse(PacketHeader *out, const void* buf, unsigned int size) {
+	// buffer must at least contain a msg of 1 byte
+	if (size < sizeof(PacketHeader) - PH_MSG_SIZE+1)
+		return false;
 	// parse initial parameters
-	PacketHeader *pkt = (PacketHeader*)malloc(sizeof(PacketHeader));
-	pkt->synch = ((PacketHeader*)buf)->synch;
-	pkt->ver = ((PacketHeader*)buf)->ver;
-	pkt->src = ((PacketHeader*)buf)->src;
-	pkt->dest = ((PacketHeader*)buf)->dest;
-	pkt->length = ((PacketHeader*)buf)->length;
-	pkt->crc_flag = ((PacketHeader*)buf)->crc_flag;
+	out->synch = ((PacketHeader*)buf)->synch;
+	out->ver = ((PacketHeader*)buf)->ver;
+	out->src = ((PacketHeader*)buf)->src;
+	out->dest = ((PacketHeader*)buf)->dest;
+	out->length = ((PacketHeader*)buf)->length;
+	out->crc_flag = ((PacketHeader*)buf)->crc_flag;
 
-	// make sure that the size accounts for the length of msg
-	if (size < sizeof(PacketHeader) - sizeof(void*) + pkt->length) {
-		free(pkt);
-		return NULL;
-	}
+	// make sure that the size of the buffer accounts for the message content
+	if (size < sizeof(PacketHeader) - PH_MSG_SIZE + out->length)
+		return false;
 
 	// parse message
-	char *msg = (char*)malloc(pkt->length);
-	memcpy(msg, &((PacketHeader*)buf)->msg, pkt->length);
-	pkt->msg = msg;
+	memcpy(out->msg, &((PacketHeader*)buf)->msg, out->length);
 
 	// make sure that the CRC field makes sense semantically. (must be 0xAA if no CRC)
-	if (!pkt->crc_flag && ((uint8_t*)buf)[size-1] != 0xAA) {
-		free(pkt);
-		return NULL;
+	if (!out->crc_flag && ((uint8_t*)buf)[size-1] != 0xAA) {
+		return false;
 	}
 
 	// parse CRC field
-	pkt->crc8_fcs = ((uint8_t*)buf)[size-1];
+	out->crc8_fcs = ((uint8_t*)buf)[size-1];
 
-	return pkt;
-}
-
-/**
- * Serializes the paket into a buffer for transmission. size is written with the size of the returned buffer.
- * @param pkt packet to serialize
- * @param size overwritten of size of buffer
- * @return malloc'd buffer
- */
-void* ph_serialize(PacketHeader *pkt, unsigned int *size) {
-	*size = sizeof(PacketHeader) - sizeof(void*) + pkt->length;
-	uint8_t *buf = (uint8_t*)malloc(*size);
-	((PacketHeader*)buf)->synch = pkt->synch;
-	((PacketHeader*)buf)->ver = pkt->ver;
-	((PacketHeader*)buf)->src = pkt->src;
-	((PacketHeader*)buf)->dest = pkt->dest;
-	((PacketHeader*)buf)->length = pkt->length;
-	((PacketHeader*)buf)->crc_flag = pkt->crc_flag;
-	memcpy(&((PacketHeader*)buf)->msg, pkt->msg, pkt->length);
-	((uint8_t*)buf)[*size-1] = pkt->crc8_fcs;
-
-	return (void*)buf;
-}
-
-/**
- * frees PacketHeader malloc'd structs by freeing
- * their message content and the PacketHeader pointer.
- */
-void ph_free(PacketHeader* pkt) {
-	free(pkt->msg);
-	free(pkt);
+	return true;
 }
 
 
