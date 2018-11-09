@@ -16,6 +16,7 @@ static RingBuffer transBuf = {0, 0};
 static int currBit = 0;
 // TODO: debug for continuously retransmitting message
 static int currByte = 0;
+static bool inTransmission = false;
 
 // Forward references
 static void transmitByte(uint8_t);
@@ -39,30 +40,34 @@ void transmitter_init() {
 
 void transmitter_mainRoutineUpdate() {
 	char c = usart2_getch();
+	// only transmit a fully received message from the uart
+	static bool gotMessage = false;
 
 	// data to transmit received, transmit it
 	if (c == '\r') {
-		// TODO: Handle when the enter is pressed
+		gotMessage = true;
+	}
+	// read in data until new line
+	else {
+		put(&dataBuf, c);
+	}
+
+	// start transmission when in TS_IDLE, and there's something to transmit
+	if (monitor_IDLE() && !inTransmission && gotMessage) {
+		currByte = 0;
+		gotMessage = false;
 		// transmit all characters
-		stopTransmission(); // in case we're transmitting something else
-		// TODO: debug, static transmitted message
-		transBuf.get = 0;
-		transBuf.put = 0;
+		transBuf.put = transBuf.get = 0;
 		while(hasElement(&dataBuf) ){
 			c = get(&dataBuf);
 			// sets the byte for transmission, or blocks if the transmission buffer is full
 			transmitByte(c);
 			printf("%c", c);
 		}
-		// start transmission when in TS_IDLE, and there's something to transmit
-		while (monitorState != TS_IDLE);
-		currByte = 0;
-		startTransmission();
+		// construct the packet buffer
 		printf("\r\n");
-	}
-	// read in data until new line
-	else {
-		put(&dataBuf, c);
+
+		startTransmission();
 	}
 
 }
@@ -105,9 +110,8 @@ void TIM2_IRQHandler(){
 		GPIOC_BASE->ODR |= (1<<8);
 	}
 
-	// Transmit the one bit by setting its value in the transmission line
-	// TODO: transmit on reverse, otherwise the data will always have to be even, instead of bit 8 having to always be 0
-	if ((transBuf.buffer[currByte] & (1<<(7-currBit))) != 0) // TODO: currBit -> (7-currBit), transmit backwards
+	// Transmit the one bit by setting its value in the transmission line. bits are sent MSB -> LSB.
+	if ((transBuf.buffer[currByte] & (1<<(7-currBit))) != 0)
 		select_gpio(TRANSMISSION_GPIO)->ODR |= 1<<TRANSMISSION_PIN;
 	else
 		select_gpio(TRANSMISSION_GPIO)->ODR &= ~(1<<TRANSMISSION_PIN);
@@ -131,7 +135,6 @@ static void transmitByte(uint8_t byte) {
 	// set the uint16_t manchester encoded byte for transmission
 	put(&transBuf, manchesterSymbol >> 8);
 	put(&transBuf, manchesterSymbol & 0xFF);
-	// TODO: changed order of bytes to transmit
 }
 
 /**
@@ -157,6 +160,7 @@ static uint16_t encodeManchester(uint8_t data){
  * Should only start when in the idle state
  */
 static inline void startTransmission() {
+	inTransmission = true;
 	clear_cnt(TRANSMITTER_TIMER);
 	start_counter(TRANSMITTER_TIMER);
 }
@@ -165,6 +169,7 @@ static inline void startTransmission() {
  * Stop transmission, either due to reaching the end of transmission or due to a collision
  */
 static inline void stopTransmission() {
+	inTransmission = false;
 	select_gpio(TRANSMISSION_GPIO)->ODR |= 1<<TRANSMISSION_PIN;
 	stop_counter(TRANSMITTER_TIMER);
 }

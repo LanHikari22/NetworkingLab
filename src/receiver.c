@@ -20,7 +20,7 @@ static uint8_t dataByte = 0;
 // flag to sample on the line per the input capture ISR
 static bool sample = true;
 // flag that indicates the start of a message
-static bool inTransmission = false;
+static bool currentlyReceiving = false;
 // Forward reference
 static void initExternalInterrupt();
 //static void initInputCapture(enum TIMs);
@@ -50,7 +50,7 @@ void receiver_mainRoutineUpdate() {
 	if (monitor_IDLE()) {
 		// reset the transmission state, since we're IDLE. Next transmission is a new transmission
 		currBit = dataByte = 0;
-		inTransmission = false;
+		currentlyReceiving = false;
 
 		// set for beginning of transmission, first bit automatically captured as zero
 		if (!sample)
@@ -58,7 +58,7 @@ void receiver_mainRoutineUpdate() {
 
 	}
 
-	if (!inTransmission) {
+	if (!currentlyReceiving) {
 
 		// grab the transmitted message, and display it
 		if (hasElement(&receiveBuf)) {
@@ -66,7 +66,7 @@ void receiver_mainRoutineUpdate() {
 			while (hasElement(&receiveBuf)) {
 				printf("%c", get(&receiveBuf));
 			}
-			printf("\n");
+			printf("\r\n");
 		}
 	}
 }
@@ -108,8 +108,8 @@ void EXTI4_IRQHandler() {
 		}
 
 		// If this is the very first bit, indicate the start of a transmission
-		if (!inTransmission)
-			inTransmission = true;
+		if (!currentlyReceiving)
+			currentlyReceiving = true;
 
 		// TODO: debug, toggle PC6 to track ISR calls
 		GPIOC_BASE->ODR ^= 1<<6;

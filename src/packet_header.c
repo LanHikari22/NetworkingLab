@@ -57,9 +57,7 @@ PacketHeader* ph_create(uint8_t src, uint8_t dest, bool crc_flag, const void* ms
  * @param msg A message buffer representing the message to put within the header
  * @param size The size of the message. Max 255 bytes
  */
-void* ph_createBuf(unsigned int *bufSize, uint8_t src, uint8_t dest, bool crc_flag, const void* msg, uint8_t size) {
-	*bufSize = sizeof(PacketHeader) - sizeof(void*) + size;
-	void *buf = (void*)malloc(*bufSize);
+void ph_createBuf(void *buf, uint8_t src, uint8_t dest, bool crc_flag, const void* msg, uint8_t size) {
 	((PacketHeader*)buf)->synch = 0x55;
 	((PacketHeader*)buf)->ver = 0x01;
 	((PacketHeader*)buf)->src = src;
@@ -68,11 +66,9 @@ void* ph_createBuf(unsigned int *bufSize, uint8_t src, uint8_t dest, bool crc_fl
 	((PacketHeader*)buf)->crc_flag = crc_flag;
 	memcpy(&((PacketHeader*)buf)->msg, msg, size);
 	if (crc_flag)
-		((uint8_t*)buf)[*bufSize-1] = ph_compute_crc8(msg, size);
+		((uint8_t*)buf)[PACKET_HEADER_BUF_SIZE-1] = ph_compute_crc8(msg, size);
 	else
-		((uint8_t*)buf)[*bufSize-1] = 0xAA;
-
-	return (void*)buf;
+		((uint8_t*)buf)[PACKET_HEADER_BUF_SIZE-1] = 0xAA;
 }
 
 /**
@@ -177,8 +173,9 @@ static uint8_t compute_crc8_byte(uint8_t byte, uint8_t polynomial) {
 		crc &= ~(0x01);
 		crc |= (byte & (1<<bit))>>bit;
 
-		// each register associated to a polynomial xors the value just shifted into it
-		crc ^= polynomial;
+		// if C8 == 1, each register associated to a polynomial xors the value just shifted into it
+		if ((crc & (1<<8)) != 0)
+			crc ^= polynomial;
 	}
 	return crc;
 }

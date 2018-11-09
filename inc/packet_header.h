@@ -22,9 +22,11 @@ typedef struct {
 	uint8_t crc8_fcs;
 }PacketHeader;
 
+#define PACKET_HEADER_BUF_SIZE	(sizeof(PacketHeader) - sizeof(void*) + 255)
+
 void ph_init();
 PacketHeader* ph_create(uint8_t src, uint8_t dest, bool crc_flag, const void* msg, uint8_t size);
-void* ph_createBuf(unsigned int *bufSize, uint8_t src, uint8_t dest, bool crc_flag, const void* msg, uint8_t size);
+void ph_createBuf(void *buf, uint8_t src, uint8_t dest, bool crc_flag, const void* msg, uint8_t size);
 PacketHeader* ph_parse(const void* buf, unsigned int size);
 void* ph_serialize(PacketHeader *pkt, unsigned int *size);
 void ph_free(PacketHeader*);
