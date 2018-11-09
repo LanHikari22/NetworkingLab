@@ -6,6 +6,7 @@
 #include "monitor.h"
 #include "uart_driver.h"
 #include "monitor.h"
+#include "packet_header.h"
 #include "io_definitions.h"
 #include <inttypes.h>
 #include <stdio.h>
@@ -17,10 +18,11 @@ static RingBuffer receiveBuf = {0, 0};
 // variable to hold each byte as it arrives
 static int currBit;
 static uint8_t dataByte = 0;
-// flag to sample on the line per the input capture ISR
-static bool sample = true;
 // flag that indicates the start of a message
 static bool currentlyReceiving = false;
+// flag to sample on the line per the input capture ISR
+static bool sample = true;
+
 // Forward reference
 static void initExternalInterrupt();
 //static void initInputCapture(enum TIMs);
@@ -47,6 +49,12 @@ void receiver_init() {
 
 // Main routine update, this should execute inside a while(1); by what uses this module.
 void receiver_mainRoutineUpdate() {
+	// buffer to retrieve from the receive ringer buffer and a cursor into it
+	static uint8_t msgBuf[sizeof(PacketHeader)];
+	static int msgCur = 0;
+	// the packet representation of the buffer
+	static PacketHeader pkt;
+
 	if (monitor_IDLE()) {
 		// reset the transmission state, since we're IDLE. Next transmission is a new transmission
 		currBit = dataByte = 0;
@@ -55,18 +63,21 @@ void receiver_mainRoutineUpdate() {
 		// set for beginning of transmission, first bit automatically captured as zero
 		if (!sample)
 			sample = true;
-
 	}
 
 	if (!currentlyReceiving) {
-
 		// grab the transmitted message, and display it
 		if (hasElement(&receiveBuf)) {
-			printf("[echo] ");
-			while (hasElement(&receiveBuf)) {
-				printf("%c", get(&receiveBuf));
+			msgCur = 0;
+			while (hasElement(&receiveBuf) && msgCur < sizeof(PacketHeader)) {
+				msgBuf[msgCur++] = get(&receiveBuf);
 			}
-			printf("\r\n");
+
+			if (!ph_parse(&pkt, msgBuf, msgCur))
+				printf("> ERROR: invalid packet");
+
+			printf("< src=%x, dest=%x, length=%d, crc8=%x\r\n", pkt.src, pkt.dest, pkt.length, pkt.crc8_fcs);
+			printf("< %s\r\n", pkt.msg);
 		}
 	}
 }
