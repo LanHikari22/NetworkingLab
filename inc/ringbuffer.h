@@ -3,7 +3,7 @@
 
 // should be a value that is divisible by 2 and 4. This makes the buffer able to contain
 // uint16_t and uint32_t elements as well.
-#define BUF_SIZE 256
+#define BUF_SIZE 1028
 
 //Ring Buffer Structure
 typedef struct

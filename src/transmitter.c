@@ -15,9 +15,10 @@
 static RingBuffer transBuf = {0, 0};
 // used by the timer ISR, determines which bit to send at the time of execution
 static int currBit = 0;
-// TODO: debug for continuously retransmitting message
 static int currByte = 0;
+// flags to tell whether a transmission is going, and whether the last one was complete. (no COLLISION)
 static bool inTransmission = false;
+static bool transmissionComplete = true;
 
 // Forward references
 static void transmitByte(uint8_t);
@@ -35,7 +36,7 @@ void transmitter_init() {
 	init_GPIO(TRANSMISSION_GPIO);
 	enable_output_mode(TRANSMISSION_GPIO, TRANSMISSION_PIN);
 
-	// Debug PC8 - Sync Signal
+	// DEBUG: PC8 - Sync Signal
 	init_GPIO(C);
 	enable_output_mode(C, 8);
 }
@@ -50,42 +51,52 @@ void transmitter_mainRoutineUpdate() {
 	// cursor that makes sure not to retrieve more than PH_MSG_SIZE bytes into dataBuf
 	static int dataCur = 0;
 
-	char c = usart2_getch();
+	if (!inTransmission) {
+		char c = usart2_getch();
 
-	// data to transmit received, transmit it
-	if (c == '\r') {
-		dataBuf[dataCur++] = '\0';
+		// data to transmit received, transmit it
+		if (c == '\r') {
+			dataBuf[dataCur] = '\0';
 
-		// just pressed enter. Don't care about that message
-		if (!strcmp(dataBuf, "\0e\0p")) {
-			dataBuf[0] = dataCur = 0;
+			// just pressed enter. Don't care about that message
+			if (!strcmp((char*)dataBuf, "\0e\0p")) {
+				dataBuf[0] = dataCur = 0;
+				gotMessage = false;
+			}
+			else {
+				gotMessage = true;
+			}
+		}
+		// read in data until new line or max buffer size reached
+		else if (dataCur < PH_MSG_SIZE-1) {
+			dataBuf[dataCur++] = c;
+		}
+
+		// start transmission when in TS_IDLE, and there's something to transmit
+		if (monitor_IDLE() && !inTransmission && gotMessage) {
+			currByte = 0;
 			gotMessage = false;
+			// transmit all characters
+			transBuf.put = transBuf.get = 0;
+			ph_create(&pkt, 0xAA, 0xBB, true, &dataBuf, dataCur);
+			if (pkt.length < PH_MSG_SIZE-1)
+				pkt.msg[pkt.length] = '\0'; // this is to display the string, since the null terminator of a string literal is not part of the msg
+			printf("> src=%x, dest=%x, length=%d, crc8=%x\r\n", pkt.src, pkt.dest, pkt.length, pkt.crc8_fcs);
+			printf("> %s\r\n", pkt.msg);
+			// clear message
+			dataBuf[0] = dataCur = 0;
+			// setup for transmission
+			transmitMessage(&pkt);
+			startTransmission();
 		}
-		else {
-			gotMessage = true;
+	}
+	// if actively transmitting
+	else {
+		// upon detecting a collision, be prepared to retransmit
+		if (monitor_COLLISION()) {
+			printf(">> COLLISION!\n");
 		}
 	}
-	// read in data until new line or max buffer size reached
-	else if (dataCur < PH_MSG_SIZE-1) {
-		dataBuf[dataCur++] = c;
-	}
-
-	// start transmission when in TS_IDLE, and there's something to transmit
-	if (monitor_IDLE() && !inTransmission && gotMessage) {
-		currByte = 0;
-		gotMessage = false;
-		// transmit all characters
-		transBuf.put = transBuf.get = 0;
-		ph_create(&pkt, 0xAA, 0xBB, true, &dataBuf, dataCur);
-		printf("> src=%x, dest=%x, length=%d, crc8=%x\r\n", pkt.src, pkt.dest, pkt.length, pkt.crc8_fcs);
-		printf("> %s\r\n", pkt.msg);
-		// clear message
-		dataBuf[0] = dataCur = 0;
-		// setup for transmission
-		transmitMessage(&pkt);
-		startTransmission();
-	}
-
 }
 
 /**
@@ -113,12 +124,22 @@ static void initTransmissionTimer() {
 void TIM2_IRQHandler(){
 	clear_output_cmp_mode_pending_flag(TRANSMITTER_TIMER);
 
-	// Cease transmission if a collision occurs /* TODO or finished transmission*/
-	if (monitorState == TS_COLLISION || !hasElement(&transBuf) || currByte == transBuf.put) {
+	// Transmission complete, nothing else to transmit
+	if (!hasElement(&transBuf) || currByte == transBuf.put) {
+			stopTransmission();
+			transmissionComplete = true;
+			// TODO: use as sync signal
+			GPIOC_BASE->ODR &= ~(1<<8);
+			return;
+	}
+	// Cease transmission if a collision occurs. Prepare to retransmit message
+	else if (monitor_COLLISION()) {
 		stopTransmission();
+		transmissionComplete = false;
 		// TODO: use as sync signal
 		GPIOC_BASE->ODR &= ~(1<<8);
 		return;
+
 	}
 
 	if (currByte == 0 && currBit == 0) {

@@ -10,10 +10,9 @@
 // main
 int main(void){
 	// Initiate/start modules
-	init_usart2(19200, F_CPU);
+ 	init_usart2(19200, F_CPU);
 	ph_init();
-	const bool EXTI9_ENABLE = false; // true if transmitter is used alone
-	monitor_start(EXTI9_ENABLE);
+	monitor_start(false); // exti9_enable = true if transmitter is used alone
 	transmitter_init();
 	receiver_init();
 

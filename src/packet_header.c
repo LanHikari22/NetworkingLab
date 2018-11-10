@@ -99,21 +99,22 @@ uint8_t ph_compute_crc8(void *msg, unsigned int size) {
 
 /**
  * computes the CRC8 for one byte. This should only be used to populate crc8_lookup_table
+ * @param byte value to compute CRC8 of
+ * @param polynomial excluding x^8 (C7), which is assumed. This can be x^2 + x^1 + 1 for example, which gives 0b111
  */
 static uint8_t compute_crc8_byte(uint8_t byte, uint8_t polynomial) {
-	uint8_t crc = 0;
+	uint8_t crc = byte;
 	// for each input bit
 	for (int bit=0; bit<8; bit++) {
-		// for each iteration, the bit shifts through the registers
-		crc <<= 1;
-
-		// load the next input in
-		crc &= ~(0x01);
-		crc |= (byte & (1<<bit))>>bit;
-
-		// if C8 == 1, each register associated to a polynomial xors the value just shifted into it
-		if ((crc & (1<<8)) != 0)
+		// if x^8 (C7) == 1, each register associated to a polynomial xors the value just shifted into it
+		if ((crc & (1<<7)) != 0) {
+			crc <<= 1; // C7 is xor fed into the crc
 			crc ^= polynomial;
+		}
+		else {
+			// for each iteration, the bit shifts through the registers
+			crc <<= 1;
+		}
 	}
 	return crc;
 }

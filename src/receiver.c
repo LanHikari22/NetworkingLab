@@ -34,10 +34,10 @@ static inline void startTimeoutTimer(uint32_t);
 void receiver_init() {
 	init_usart2(19200, F_CPU);
 	init_GPIO(C);
-	// TODO Debug PC6 - Sample Toggle
+	// DEBUG: PC6 - Sample Toggle
 	enable_output_mode(C, 6);
-	// TODO Debug PC8 - Even bitperiod Counter Toggle
-	enable_output_mode(C, 8);
+	// DEBUG: PC8 - Even bitperiod Counter Toggle
+//	enable_output_mode(C, 8);
 
 	// the receive pin has to change based on the specific timer. PC6 AF 2 is for TIM3_CH1
 //	init_GPIO(C);
@@ -65,20 +65,30 @@ void receiver_mainRoutineUpdate() {
 			sample = true;
 	}
 
-	if (!currentlyReceiving) {
+	if (currentlyReceiving && monitor_COLLISION()) {
+		printf("<< COLLISION!\r\n");
+		// cease all receiving
+		stop_counter(TIM4);
+		currentlyReceiving = false;
+		// drop partially received message
+		receiveBuf.put = receiveBuf.get = 0;
+	}
+
+	if (!currentlyReceiving && hasElement(&receiveBuf)) {
 		// grab the transmitted message, and display it
-		if (hasElement(&receiveBuf)) {
-			msgCur = 0;
-			while (hasElement(&receiveBuf) && msgCur < sizeof(PacketHeader)) {
-				msgBuf[msgCur++] = get(&receiveBuf);
-			}
-
-			if (!ph_parse(&pkt, msgBuf, msgCur))
-				printf("> ERROR: invalid packet");
-
-			printf("< src=%x, dest=%x, length=%d, crc8=%x\r\n", pkt.src, pkt.dest, pkt.length, pkt.crc8_fcs);
-			printf("< %s\r\n", pkt.msg);
+		msgCur = 0;
+		while (hasElement(&receiveBuf) && msgCur < sizeof(PacketHeader)) {
+			msgBuf[msgCur++] = get(&receiveBuf);
 		}
+
+		if (!ph_parse(&pkt, msgBuf, msgCur))
+			printf("< ERROR: invalid packet");
+
+		if (pkt.length < PH_MSG_SIZE-1)
+			pkt.msg[pkt.length] = '\0'; // this is to display the string, since the null terminator of a string literal is not part of the msg
+
+		printf("< src=%x, dest=%x, length=%d, crc8=%x\r\n", pkt.src, pkt.dest, pkt.length, pkt.crc8_fcs);
+		printf("< %s\r\n", pkt.msg);
 	}
 }
 
@@ -138,13 +148,12 @@ void EXTI4_IRQHandler() {
 }
 
 
-
 // Counter Timer for Half bit timeout. Indicates whether to sample on the next half clock period or not
 void TIM4_IRQHandler() {
 	clear_output_cmp_mode_pending_flag(TIM4);
 
-	// TODO: debug, toggle PC6 to track ISR calls
-	GPIOC_BASE->ODR ^= 1<<8;
+	// DEBUG: toggle PC6 to track ISR calls
+//	GPIOC_BASE->ODR ^= 1<<8;
 
 	// if this timeout occurs, we're at bit period edge, the next must be a sample.
 	sample = true;
@@ -153,23 +162,6 @@ void TIM4_IRQHandler() {
 	stop_counter(TIM4);
 }
 
-// Input Capture Timer ISR used for receiving. Update if using a different timer
-//void TIM3_IRQHandler() {
-//
-//}
-
-
-// Enables the Input Capture Timer for stamping and sampling on edge. Sampling only occurs every half-period edge.
-// assumes the gpio pin has already been set up to AF
-//static void initInputCapture(enum TIMs TIMER) {
-//	enable_timer_clk(TIMER);
-//	set_to_input_capture_mode(TIMER);
-////	set_to_counter_mode(TIMER);
-//	log_tim_interrupt(TIMER);
-//	enable_input_capture_mode_interrupt(TIMER);
-//	clear_cnt(TIMER);
-//	start_counter(TIMER);
-//}
 
 // initiates the counter timer based on the HALFBIT_TIMEOUT_TICKS
 static void initCounterTimer(enum TIMs TIMER) {

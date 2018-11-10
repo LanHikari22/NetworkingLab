@@ -11,7 +11,8 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
-#define PH_MSG_SIZE 255
+// maximum size put in PacketHeader.length
+#define PH_MSG_SIZE 0xFF
 
 typedef struct {
 	uint8_t synch;
