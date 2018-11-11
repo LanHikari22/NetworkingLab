@@ -15,13 +15,10 @@
 #include <stdbool.h>
 
 typedef enum {
-	TS_IDLE,
-	TS_BUSY,
-	TS_COLLISION
-} TRANSMISSION_STATE;
-
-// The current state of the monitor as it monitors PC9
-extern TRANSMISSION_STATE monitorState;
+	MS_IDLE,
+	MS_BUSY,
+	MS_COLLISION
+} MONITOR_STATE;
 
 // The period of time until a data transmission timeout occurs
 // The monitor enters the TS_IDLE or TS_COLLISION states when that happens
@@ -29,23 +26,8 @@ extern TRANSMISSION_STATE monitorState;
 
 
 void monitor_start(bool exti9_enable);
-
-// returns true if in IDLE state by checking the idle signal
-bool monitor_IDLE();
-
-// returns true if in BUSY state by checking the busy signal
-bool monitor_BUSY();
-
-// returns true if in COLLISION state by checking collision signal
-bool monitor_COLLISION();
-
-// LED Light Status
-#define LED_IDLE_PB13 (1<<13)
-#define LED_BUSY_PB14 (1<<14)
-#define LED_COLLISION_PB15 (1<<15)
-
-// Output mode for LEDs
-#define GPIOB_LEDS_OUTPUT_MODE (0b010101 << 26)
+MONITOR_STATE monitor_getState();
+void monitor_jam();
 
 void setupPinInterrupt();
 void SysTick_Handler();

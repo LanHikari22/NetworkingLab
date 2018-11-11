@@ -10,6 +10,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 // transmission buffer to put the manchester encoded bytes in for transmission
 static RingBuffer transBuf = {0, 0};
@@ -19,12 +20,14 @@ static int currByte = 0;
 // flags to tell whether a transmission is going, and whether the last one was complete. (no COLLISION)
 static bool inTransmission = false;
 static bool transmissionComplete = true;
+static bool retransmissionTimeoutActive = false;
 
 // Forward references
 static void transmitByte(uint8_t);
 static void transmitMessage(const PacketHeader *pkt);
 static uint16_t encodeManchester(uint8_t);
 static void initTransmissionTimer();
+static void toggleRetransmission(bool retransmission);
 static void startTransmission();
 static void stopTransmission();
 
@@ -36,6 +39,10 @@ void transmitter_init() {
 	init_GPIO(TRANSMISSION_GPIO);
 	enable_output_mode(TRANSMISSION_GPIO, TRANSMISSION_PIN);
 
+	// Init rng, used for retransmission
+	srand(clock(0));
+	// DEBUG: PC6 - Retransmission Timeout Period
+	enable_output_mode(C, 6);
 	// DEBUG: PC8 - Sync Signal
 	init_GPIO(C);
 	enable_output_mode(C, 8);
@@ -51,7 +58,13 @@ void transmitter_mainRoutineUpdate() {
 	// cursor that makes sure not to retrieve more than PH_MSG_SIZE bytes into dataBuf
 	static int dataCur = 0;
 
-	if (!inTransmission) {
+	if (inTransmission && transmissionComplete) {
+		if (currByte > 2*7 + 2*5) {
+
+			monitor_jam();
+		}
+	}
+	else if (!inTransmission && transmissionComplete) {
 		char c = usart2_getch();
 
 		// data to transmit received, transmit it
@@ -73,7 +86,7 @@ void transmitter_mainRoutineUpdate() {
 		}
 
 		// start transmission when in TS_IDLE, and there's something to transmit
-		if (monitor_IDLE() && !inTransmission && gotMessage) {
+		if (monitor_getState() == MS_IDLE && !inTransmission && gotMessage) {
 			currByte = 0;
 			gotMessage = false;
 			// transmit all characters
@@ -90,12 +103,11 @@ void transmitter_mainRoutineUpdate() {
 			startTransmission();
 		}
 	}
-	// if actively transmitting
-	else {
-		// upon detecting a collision, be prepared to retransmit
-		if (monitor_COLLISION()) {
-			printf(">> COLLISION!\n");
-		}
+	// retransmit after a timeout period
+	else if (monitor_getState() == MS_IDLE && !inTransmission && !transmissionComplete){
+		currByte = currBit = 0; // transmit same message from the start
+		toggleRetransmission(true);
+		startTransmission();
 	}
 }
 
@@ -106,6 +118,7 @@ static void initTransmissionTimer() {
 	enable_timer_clk(TRANSMITTER_TIMER);
 	set_arr(TRANSMITTER_TIMER, TRANSMISSION_TICKS);
 	set_ccr1(TRANSMITTER_TIMER, TRANSMISSION_TICKS);
+	set_psc(TRANSMITTER_TIMER, 0);
 	// enables toggle on CCR1
 	set_to_output_cmp_mode(TRANSMITTER_TIMER);
 	// enables output in CCER
@@ -118,11 +131,51 @@ static void initTransmissionTimer() {
 }
 
 /**
+ * toggles the function of the timer from transmission to retransission timeout
+ * or vice versa. This is to use the same timer for the random timeout period.
+ * if set to retransmission mode, this computes a random time and sets the ticks to that
+ * and starts the timer.
+ */
+static void toggleRetransmission(bool retransmission) {
+	retransmissionTimeoutActive = retransmission;
+	stop_counter(TRANSMITTER_TIMER);
+	if (retransmission) {
+		// configure timer for retransmission timeout
+		set_psc(TRANSMITTER_TIMER, 16000); // ms scale
+		// generate exact timeout
+		int N = rand() % TRANSMITTER_N_MAX;
+		int w = N *1000/TRANSMITTER_N_MAX;
+		printf(">> Retransmitting in %d ms...\r\n", w);
+		// set count
+		set_arr(TRANSMITTER_TIMER, w);
+		set_ccr1(TRANSMITTER_TIMER, w);
+	}
+	else {
+		set_psc(TRANSMITTER_TIMER, 0); // cpu scale
+		set_arr(TRANSMITTER_TIMER, TRANSMISSION_TICKS);
+		set_ccr1(TRANSMITTER_TIMER, TRANSMISSION_TICKS);
+	}
+
+}
+
+/**
  * This resets itself to transmit as long as the transmission buffer is not empty.
  * It changes the PC9 line every half-clock period in order to match the required bit rate.
  */
 void TIM2_IRQHandler(){
 	clear_output_cmp_mode_pending_flag(TRANSMITTER_TIMER);
+
+	// retransmission mode, start transmission after timeout
+	if (retransmissionTimeoutActive) {
+		toggleRetransmission(false);
+		startTransmission();
+		// TODO DEBUG: to confirm timeout period
+//		clear_cnt(TRANSMITTER_TIMER);
+//		select_gpio(C)->ODR ^= (1<<6);
+		return;
+	}
+	// TODO DEBUG
+	select_gpio(C)->ODR ^= (1<<6);
 
 	// Transmission complete, nothing else to transmit
 	if (!hasElement(&transBuf) || currByte == transBuf.put) {
@@ -133,7 +186,7 @@ void TIM2_IRQHandler(){
 			return;
 	}
 	// Cease transmission if a collision occurs. Prepare to retransmit message
-	else if (monitor_COLLISION()) {
+	else if (monitor_getState() == MS_COLLISION) {
 		stopTransmission();
 		transmissionComplete = false;
 		// TODO: use as sync signal

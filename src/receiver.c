@@ -35,7 +35,7 @@ void receiver_init() {
 	init_usart2(19200, F_CPU);
 	init_GPIO(C);
 	// DEBUG: PC6 - Sample Toggle
-	enable_output_mode(C, 6);
+//	enable_output_mode(C, 6);
 	// DEBUG: PC8 - Even bitperiod Counter Toggle
 //	enable_output_mode(C, 8);
 
@@ -55,7 +55,7 @@ void receiver_mainRoutineUpdate() {
 	// the packet representation of the buffer
 	static PacketHeader pkt;
 
-	if (monitor_IDLE()) {
+	if (monitor_getState() == MS_IDLE) {
 		// reset the transmission state, since we're IDLE. Next transmission is a new transmission
 		currBit = dataByte = 0;
 		currentlyReceiving = false;
@@ -65,13 +65,15 @@ void receiver_mainRoutineUpdate() {
 			sample = true;
 	}
 
-	if (currentlyReceiving && monitor_COLLISION()) {
-		printf("<< COLLISION!\r\n");
-		// cease all receiving
-		stop_counter(TIM4);
-		currentlyReceiving = false;
-		// drop partially received message
-		receiveBuf.put = receiveBuf.get = 0;
+	if (currentlyReceiving) {
+		if (monitor_getState() == MS_COLLISION) {
+			printf("<< COLLISION!\r\n");
+			// cease all receiving
+			stop_counter(TIM4);
+			currentlyReceiving = false;
+			// drop partially received message
+			receiveBuf.put = receiveBuf.get = 0;
+		}
 	}
 
 	if (!currentlyReceiving && hasElement(&receiveBuf)) {
@@ -82,7 +84,7 @@ void receiver_mainRoutineUpdate() {
 		}
 
 		if (!ph_parse(&pkt, msgBuf, msgCur))
-			printf("< ERROR: invalid packet");
+			printf("<< ERROR: invalid packet\r\n");
 
 		if (pkt.length < PH_MSG_SIZE-1)
 			pkt.msg[pkt.length] = '\0'; // this is to display the string, since the null terminator of a string literal is not part of the msg
@@ -133,7 +135,7 @@ void EXTI4_IRQHandler() {
 			currentlyReceiving = true;
 
 		// TODO: debug, toggle PC6 to track ISR calls
-		GPIOC_BASE->ODR ^= 1<<6;
+//		GPIOC_BASE->ODR ^= 1<<6;
 	}
 	// case when we're in a clock period edge
 	else {

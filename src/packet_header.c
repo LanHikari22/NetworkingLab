@@ -51,6 +51,7 @@ void ph_create(PacketHeader *out, uint8_t src, uint8_t dest, bool crc_flag, cons
  * Invalid format is:
  *	- buffer too small to encode full content
  * 	- crc_flag is 0, but crc8_fcs is not 0xAA
+ * 	- crc_flag is 1, but computed crc8 does not match with crc8_fcs
  * @param buf The buffer to parse
  * @return parsing status
  */
@@ -77,10 +78,14 @@ bool ph_parse(PacketHeader *out, const void* buf, unsigned int size) {
 	if (!out->crc_flag && ((uint8_t*)buf)[size-1] != 0xAA) {
 		return false;
 	}
-
-	// parse CRC field
-	out->crc8_fcs = ((uint8_t*)buf)[size-1];
-
+	else {
+		// parse CRC field
+		out->crc8_fcs = ((uint8_t*)buf)[size-1];
+		// confirm CRC field
+		if (ph_compute_crc8(out->msg, out->length) != out->crc8_fcs){
+			return false;
+		}
+	}
 	return true;
 }
 

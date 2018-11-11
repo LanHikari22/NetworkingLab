@@ -9,7 +9,10 @@
 
 // The transmission bit rate dictates the ticks used for the timers
 // ticks = 1E6/f_hz / 0.0625 / 2
-#define TRANSMISSION_TICKS	8000 // 1000 bps
+#define TRANSMISSION_TICKS	8000 // f_hz = 1000 bps -> 500 us ticks. (1 tick = 62.5 ns)
+
+// For retransmission, determines the number of uniform random points rom 0s to 1.000s to timeout on.
+#define TRANSMITTER_N_MAX	200 // N_MAX, must at least be 180
 
 // Output pin used for transmission
 #define TRANSMISSION_GPIO	C

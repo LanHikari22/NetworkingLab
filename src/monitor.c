@@ -4,8 +4,16 @@
 #include "io_definitions.h"
 #include <inttypes.h>
 
+// LED Light Status
+#define LED_IDLE_PB13 (1<<13)
+#define LED_BUSY_PB14 (1<<14)
+#define LED_COLLISION_PB15 (1<<15)
 
-TRANSMISSION_STATE monitorState;
+// Output mode for LEDs
+#define GPIOB_LEDS_OUTPUT_MODE (0b010101 << 26)
+
+// monitor state as observed on monitor line
+MONITOR_STATE monitorState;
 
 // either 1 or 0, updated by the pin interrupt
 static int lineState;
@@ -13,9 +21,9 @@ static int lineState;
 // This macro lets the reciever handles its own interrupt driven logic with PC9.
 // if disabled, no interrupt is hooked on PC9 even though the PC9 line is monitered.
 // (instead, the pin interrupt logic monitor_Edge_Intrr is exposed to be used for a pin connected to PC9)
-// TODO: turn into module input
 static bool exti9Enable;
 
+static inline void updateMonitorState(MONITOR_STATE newState);
 
 void monitor_start(bool exti9_enable) {
 		exti9Enable = exti9_enable;
@@ -34,11 +42,16 @@ void monitor_start(bool exti9_enable) {
 //		enable_output_mode(C, 8);
 //		GPIOC_BASE->ODR &= ~(1<<8);
 
-		monitorState = TS_IDLE;
-		GPIOB_BASE->ODR &= ~(0b111 << 13);
-		GPIOB_BASE->ODR |= (LED_IDLE_PB13);
+		updateMonitorState(MS_IDLE);
 
 		setupPinInterrupt();
+}
+
+/**
+ * returns the monitor state, without exposing the variable outside this module
+ */
+MONITOR_STATE monitor_getState() {
+	return monitorState;
 }
 
 void setupPinInterrupt(){
@@ -112,14 +125,10 @@ void SysTick_Handler() {
 	// set to TS_IDLE or TS_COLLISION based on line state
 	// and update PB13-PB14-PB15
 	if(lineState != 0){
-		monitorState = TS_IDLE;
-		GPIOB_BASE->ODR &= ~(0b111 << 13);
-		GPIOB_BASE->ODR |= (LED_IDLE_PB13);
+		updateMonitorState(MS_IDLE);
 	}
 	else {
-		monitorState = TS_COLLISION;
-		GPIOB_BASE->ODR &= ~(0b111 << 13);
-		GPIOB_BASE->ODR |= (LED_COLLISION_PB15);
+		updateMonitorState(MS_COLLISION);
 	}
 }
 
@@ -141,20 +150,35 @@ void monitor_Edge_Intrr(){
 		// update line state
 		lineState = (GPIOC_BASE->IDR &(1<<9))>>9;
 		// change state
-		monitorState = TS_BUSY;
-		GPIOB_BASE->ODR &= ~(0b111 << 13);
+		updateMonitorState(MS_BUSY);
+}
+
+/**
+ * if the monitor state is busy, this forces it to collission. This is for testing purposes, mainly.
+ */
+void monitor_jam(){
+	if (monitorState == MS_BUSY) {
+		updateMonitorState(MS_COLLISION);
+	}
+}
+
+/**
+ * updates the monitor_state, as well as output signals indicating the state
+ */
+static inline void updateMonitorState(MONITOR_STATE newState) {
+	GPIOB_BASE->ODR &= ~(0b111 << 13);
+	switch (newState) {
+	case MS_IDLE:
+		monitorState = MS_IDLE;
+		GPIOB_BASE->ODR |= (LED_IDLE_PB13);
+		break;
+	case MS_BUSY:
+		monitorState = MS_BUSY;
 		GPIOB_BASE->ODR |= (LED_BUSY_PB14);
+		break;
+	case MS_COLLISION:
+		monitorState = MS_COLLISION;
+		GPIOB_BASE->ODR |= (LED_COLLISION_PB15);
+		break;
+	}
 }
-
-bool monitor_IDLE() {
-	return (GPIOB_BASE->ODR & LED_IDLE_PB13) != 0;
-}
-
-bool monitor_BUSY() {
-	return (GPIOB_BASE->ODR & LED_BUSY_PB14) != 0;
-}
-
-bool monitor_COLLISION() {
-	return (GPIOB_BASE->ODR & LED_COLLISION_PB15) != 0;
-}
-
