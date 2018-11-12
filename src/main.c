@@ -12,9 +12,15 @@ int main(void){
 	// Initiate/start modules
 	init_usart2(19200, F_CPU);
 	ph_init();
-	monitor_start(false); // exti9_enable = true if transmitter is used alone
-	transmitter_init();
-	receiver_init();
+
+	const bool EXTI9_ENABLE = false;
+	const bool PACKET_MODE = true;
+	const uint8_t SRC = 0xAA;
+	const uint8_t DEST = 0xBB;
+
+	monitor_start(EXTI9_ENABLE); // exti9_enable = true if transmitter is used alone
+	transmitter_init(SRC, DEST, PACKET_MODE);
+	receiver_init(PACKET_MODE);
 
 	// Main routine
 	while (1) {

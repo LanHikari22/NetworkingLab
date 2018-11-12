@@ -61,8 +61,8 @@ void setupPinInterrupt(){
 	// Enable Clocks for GPIOC
 	init_GPIO(C);
 
-	// PC9 is input signal to monitor
-	enable_input_mode(C, 9);
+	// PC4 is input signal to monitor
+	enable_input_mode(C, 4);
 
 	// in case the monitor module handles its own pin interrupt.
 	if (exti9Enable) {
@@ -144,11 +144,15 @@ void EXTI9_5_IRQHandler() {
 		*(EXTI_PR) |= 1<<9;
 	}
 }
+
+/**
+ * triggers on EXTI4. EXTI9 is no longer supported. TODO: remomve that, as this merges with the reciever pin, rather than the transmit pin
+ */
 void monitor_Edge_Intrr(){
 		// reset counter
 		resetTimer(TRANSMISSION_TIMEOUT_US);
 		// update line state
-		lineState = (GPIOC_BASE->IDR &(1<<9))>>9;
+		lineState = (GPIOC_BASE->IDR &(1<<4))>>4;
 		// change state
 		updateMonitorState(MS_BUSY);
 }

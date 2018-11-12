@@ -22,6 +22,14 @@ static bool inTransmission = false;
 static bool transmissionComplete = true;
 static bool retransmissionTimeoutActive = false;
 
+// input state
+// determines whether to transmit packets or not
+static bool packetMode = false;
+// src address that determines this sender node
+static uint8_t src = 0;
+// dest address that determines the node to send to
+static uint8_t dest = 0;
+
 // Forward references
 static void transmitByte(uint8_t);
 static void transmitMessage(const PacketHeader *pkt);
@@ -31,7 +39,12 @@ static void toggleRetransmission(bool retransmission);
 static void startTransmission();
 static void stopTransmission();
 
-void transmitter_init() {
+void transmitter_init(uint8_t src_addr, uint8_t dest_addr, bool packet_mode) {
+	// module input
+	packetMode = packet_mode;
+	src = src_addr;
+	dest = dest_addr;
+
 	init_usart2(19200, F_CPU);
 	initTransmissionTimer();
 
@@ -39,13 +52,15 @@ void transmitter_init() {
 	init_GPIO(TRANSMISSION_GPIO);
 	enable_output_mode(TRANSMISSION_GPIO, TRANSMISSION_PIN);
 
+
+
 	// Init rng, used for retransmission
 	srand(clock(0));
-	// DEBUG: PC6 - Retransmission Timeout Period
-	enable_output_mode(C, 6);
-	// DEBUG: PC8 - Sync Signal
 	init_GPIO(C);
-	enable_output_mode(C, 8);
+	// DEBUG: PC6 - Retransmission Timeout Period
+//	enable_output_mode(C, 6);
+	// DEBUG: PC5 - Sync Signal
+	enable_output_mode(C, 5);
 }
 
 void transmitter_mainRoutineUpdate() {
@@ -59,10 +74,9 @@ void transmitter_mainRoutineUpdate() {
 	static int dataCur = 0;
 
 	if (inTransmission && transmissionComplete) {
-		if (currByte > 2*7 + 2*5) {
-
-			monitor_jam();
-		}
+//		if (currByte > 2*7 + 2*5) {
+//			monitor_jam();
+//		}
 	}
 	else if (!inTransmission && transmissionComplete) {
 		char c = usart2_getch();
@@ -89,17 +103,33 @@ void transmitter_mainRoutineUpdate() {
 		if (monitor_getState() == MS_IDLE && !inTransmission && gotMessage) {
 			currByte = 0;
 			gotMessage = false;
+
 			// transmit all characters
 			transBuf.put = transBuf.get = 0;
-			ph_create(&pkt, 0xAA, 0xBB, true, &dataBuf, dataCur);
-			if (pkt.length < PH_MSG_SIZE-1)
-				pkt.msg[pkt.length] = '\0'; // this is to display the string, since the null terminator of a string literal is not part of the msg
-			printf("> src=%x, dest=%x, length=%d, crc8=%x\r\n", pkt.src, pkt.dest, pkt.length, pkt.crc8_fcs);
-			printf("> %s\r\n", pkt.msg);
+
+			if (packetMode) {
+				// create packet
+				ph_create(&pkt, src, dest, true, &dataBuf, dataCur);
+				if (pkt.length < PH_MSG_SIZE-1)
+					pkt.msg[pkt.length] = '\0'; // this is to display the string, since the null terminator of a string literal is not part of the msg
+				// echo packet
+				printf("> src=%x, dest=%x, length=%d, crc8=%x\r\n", pkt.src, pkt.dest, pkt.length, pkt.crc8_fcs);
+				printf("> %s\r\n", pkt.msg);
+				// setup for transmission
+				transmitMessage(&pkt);
+			}
+			else {
+				if (dataCur < PH_MSG_SIZE-1)
+					dataBuf[dataCur++] = '\0'; // this is to display the string, since the null terminator of a string literal is not part of the msg
+				printf("> %s\r\n", dataBuf);
+				for (int i=0; i<dataCur; i++) {
+					transmitByte(dataBuf[i]);
+				}
+			}
+
 			// clear message
 			dataBuf[0] = dataCur = 0;
-			// setup for transmission
-			transmitMessage(&pkt);
+
 			startTransmission();
 		}
 	}
@@ -169,35 +199,33 @@ void TIM2_IRQHandler(){
 	if (retransmissionTimeoutActive) {
 		toggleRetransmission(false);
 		startTransmission();
-		// TODO DEBUG: to confirm timeout period
+		// TODO DEBUG PC6: to confirm timeout period
 //		clear_cnt(TRANSMITTER_TIMER);
 //		select_gpio(C)->ODR ^= (1<<6);
 		return;
 	}
-	// TODO DEBUG
-	select_gpio(C)->ODR ^= (1<<6);
 
 	// Transmission complete, nothing else to transmit
 	if (!hasElement(&transBuf) || currByte == transBuf.put) {
 			stopTransmission();
 			transmissionComplete = true;
-			// TODO: use as sync signal
-			GPIOC_BASE->ODR &= ~(1<<8);
+			// DEBUG PC5: use as sync signal
+			GPIOC_BASE->ODR &= ~(1<<5);
 			return;
 	}
 	// Cease transmission if a collision occurs. Prepare to retransmit message
 	else if (monitor_getState() == MS_COLLISION) {
 		stopTransmission();
 		transmissionComplete = false;
-		// TODO: use as sync signal
-		GPIOC_BASE->ODR &= ~(1<<8);
+		// TODO PC5: use as sync signal
+		GPIOC_BASE->ODR &= ~(1<<5);
 		return;
 
 	}
 
 	if (currByte == 0 && currBit == 0) {
-		// TODO: use as sync signal
-		GPIOC_BASE->ODR |= (1<<8);
+		// TODO PC5: use as sync signal
+		GPIOC_BASE->ODR |= (1<<5);
 	}
 
 	// Transmit the one bit by setting its value in the transmission line. bits are sent MSB -> LSB.

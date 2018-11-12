@@ -2,6 +2,8 @@
 #define TRANSMITTER_H
 
 #include "tim.h"
+#include <inttypes.h>
+#include <stdbool.h>
 
 // Timer dedicated for the transmission
 // Update the corresponding ISR handler as well
@@ -19,7 +21,7 @@
 #define TRANSMISSION_PIN	9
 
 // initiates the transmitter module
-void transmitter_init();
+void transmitter_init(uint8_t srcAddr, uint8_t destAddr, bool packet_mode);
 
 // Main routine update, this should execute inside a while(1); by what uses this module.
 void transmitter_mainRoutineUpdate();

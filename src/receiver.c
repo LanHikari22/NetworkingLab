@@ -22,7 +22,8 @@ static uint8_t dataByte = 0;
 static bool currentlyReceiving = false;
 // flag to sample on the line per the input capture ISR
 static bool sample = true;
-
+// if true, only send packets.
+static bool packetMode = false;
 // Forward reference
 static void initExternalInterrupt();
 //static void initInputCapture(enum TIMs);
@@ -31,18 +32,17 @@ static inline void stopTimeoutTimer();
 static inline void startTimeoutTimer(uint32_t);
 
 // initiates the receiver module
-void receiver_init() {
+void receiver_init(bool packet_mode) {
 	init_usart2(19200, F_CPU);
 	init_GPIO(C);
 	// DEBUG: PC6 - Sample Toggle
-//	enable_output_mode(C, 6);
+	enable_output_mode(C, 6);
 	// DEBUG: PC8 - Even bitperiod Counter Toggle
-//	enable_output_mode(C, 8);
+	enable_output_mode(C, 8);
 
-	// the receive pin has to change based on the specific timer. PC6 AF 2 is for TIM3_CH1
-//	init_GPIO(C);
-//	enable_af_mode(C, 6, 2);
-//	initInputCapture(TIM3);
+	packetMode = packet_mode;
+
+	// the receive pin has to change based on the specific timer.
 	initExternalInterrupt();
 	initCounterTimer(TIM4);
 }
@@ -83,14 +83,21 @@ void receiver_mainRoutineUpdate() {
 			msgBuf[msgCur++] = get(&receiveBuf);
 		}
 
-		if (!ph_parse(&pkt, msgBuf, msgCur))
-			printf("<< ERROR: invalid packet\r\n");
+		if (packetMode) {
+			if (!ph_parse(&pkt, msgBuf, msgCur))
+				printf("<< ERROR: invalid packet\r\n");
 
-		if (pkt.length < PH_MSG_SIZE-1)
-			pkt.msg[pkt.length] = '\0'; // this is to display the string, since the null terminator of a string literal is not part of the msg
+			if (pkt.length < PH_MSG_SIZE-1)
+				pkt.msg[pkt.length] = '\0'; // this is to display the string, since the null terminator of a string literal is not part of the msg
 
-		printf("< src=%x, dest=%x, length=%d, crc8=%x\r\n", pkt.src, pkt.dest, pkt.length, pkt.crc8_fcs);
-		printf("< %s\r\n", pkt.msg);
+			printf("< src=%x, dest=%x, length=%d, crc8=%x\r\n", pkt.src, pkt.dest, pkt.length, pkt.crc8_fcs);
+			printf("< %s\r\n", pkt.msg);
+		}
+		else {
+			if (msgCur < PH_MSG_SIZE-1)
+				msgBuf[msgCur+1] = '\0'; // for proper display
+			printf("< %s", msgBuf);
+		}
 	}
 }
 
@@ -134,8 +141,8 @@ void EXTI4_IRQHandler() {
 		if (!currentlyReceiving)
 			currentlyReceiving = true;
 
-		// TODO: debug, toggle PC6 to track ISR calls
-//		GPIOC_BASE->ODR ^= 1<<6;
+		// DEBUG PC6: toggle to track sample ISR calls
+		GPIOC_BASE->ODR ^= 1<<6;
 	}
 	// case when we're in a clock period edge
 	else {
@@ -154,8 +161,8 @@ void EXTI4_IRQHandler() {
 void TIM4_IRQHandler() {
 	clear_output_cmp_mode_pending_flag(TIM4);
 
-	// DEBUG: toggle PC6 to track ISR calls
-//	GPIOC_BASE->ODR ^= 1<<8;
+	// DEBUG PC8: toggle to track ISR calls (halftime)
+	GPIOC_BASE->ODR ^= 1<<8;
 
 	// if this timeout occurs, we're at bit period edge, the next must be a sample.
 	sample = true;
